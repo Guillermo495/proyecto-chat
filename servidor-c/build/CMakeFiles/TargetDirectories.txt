@@ -1,0 +1,3 @@
+/home/memo/Documentos/Modelado y Programación/proyecto-chat/servidor-c/build/CMakeFiles/chat_server.dir
+/home/memo/Documentos/Modelado y Programación/proyecto-chat/servidor-c/build/CMakeFiles/edit_cache.dir
+/home/memo/Documentos/Modelado y Programación/proyecto-chat/servidor-c/build/CMakeFiles/rebuild_cache.dir
