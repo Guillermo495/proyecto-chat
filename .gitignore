@@ -1,0 +1,12 @@
+# Archivos generados por CMake.
+build/
+
+# Archivos generados por .NET.
+bin/
+obj/
+
+# Resultados de pruebas de .NET.
+TestResults/
+
+# Metadatos de carpetas de KDE.
+.directory

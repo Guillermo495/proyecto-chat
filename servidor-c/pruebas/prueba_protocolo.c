@@ -1,0 +1,1 @@
+// Pruebas unitarias de validacion de los mensajes IDENTIFY, STATUS, etc.
