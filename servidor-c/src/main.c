@@ -16,26 +16,26 @@ int main(int cantidad_argumentos, char *argumentos[])
     /* El programa necesita exactamente un argumento, el puerto*/
     if (cantidad_argumentos != 2)
 
-    /*fprintf: imprime con formato y permite elegir el flujo del destino, FILE o stderr por ejemplo*/
+    /* fprintf: imprime con formato y permite elegir el flujo del destino, stderr o FILE. */
     {
         fprintf(stderr, "Uso: %s <puerto>\n", argumentos[0]);
         return EXIT_FAILURE;
     }
 
     /* strtol: convierte el argumento a un entero decimal. */
-    char *fin;
-    errno = 0;
+    char *fin; /* Usuario ingresa texto como argumento del puerto. */
+    errno = 0; /* Indicador de errores se reinicia. */
     long puerto = strtol(argumentos[1], &fin, 10);
 
     /* Verifica que todo el argumento represente un puerto válido. */
-    if (errno == ERANGE ||
-        fin == argumentos[1] ||
-        *fin != '\0' ||
-        puerto < 1 ||
+    if (errno == ERANGE ||      /* Detecta si el numero es muy grande. */
+        fin == argumentos[1] || /* Sin digitos convertidos. */
+        *fin != '\0' ||         /* Detecta caracteres basura. */
+        puerto < 1 ||           /* Un entero sin signo va desde 0 hasta 2^16-1 = 65535. */
         puerto > 65535)
     {
         fprintf(stderr,
-                "Puerto inválido: debe ser un entero entre 1 y 65535.\n");
+                "Puerto inválido: debe ser un entero entre 1 y 65535.\n"); /* MEnsaje si el puerto ingresado no es valido. */
         return EXIT_FAILURE;
     }
 
