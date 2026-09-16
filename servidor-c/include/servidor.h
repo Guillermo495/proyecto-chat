@@ -9,9 +9,9 @@ typedef struct Servidor Servidor;
 /* Crea el servidor; devuelve NULL si falla. */
 Servidor *servidor_crear(uint16_t puerto);
 
-/* Abre la escucha y retorna; todavía no acepta conexiones.
- * Devuelve 0 si tiene exito.
- * Devuelve -1 si falla, recibe NULL o la escucha ya esta abierta.
+/* Abre la escucha y maneja multiples conexiones mediante select.
+ * Recibe bytes y detecta desconexiones; aun no procesa mensajes.
+ * Devuelve -1 si no puede continuar.
  */
 int servidor_ejecutar(Servidor *servidor);
 

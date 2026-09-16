@@ -11,6 +11,10 @@
 #include <sys/socket.h>
 #include <unistd.h>
 
+#include <errno.h>
+#include <fcntl.h>
+#include <sys/select.h>
+
 struct Servidor
 {
     /* Puerto donde escuchará el servidor. */
@@ -87,8 +91,8 @@ static int servidor_abrir_escucha(Servidor *servidor)
     direccion.sin_addr.s_addr = htonl(INADDR_ANY);
     direccion.sin_port = htons(servidor->puerto);
 
-    /* une = bind*/
-    if (une(
+    /* une. */
+    if (bind(
             descriptor,
             (struct sockaddr *)&direccion,
             sizeof(direccion)) == -1)
@@ -97,8 +101,8 @@ static int servidor_abrir_escucha(Servidor *servidor)
         close(descriptor);
         return -1;
     }
-    /* escucha = listen. */
-    if (escucha(descriptor, SOMAXCONN) == -1)
+    /* escucha. */
+    if (listen(descriptor, SOMAXCONN) == -1)
     {
         perror("No se pudo iniciar la escucha.");
         close(descriptor);
@@ -107,6 +111,75 @@ static int servidor_abrir_escucha(Servidor *servidor)
 
     /* Guarda el identificador "descriptor", lo usa y posteriormente lo cierra. */
     servidor->descriptor_escucha = descriptor;
+    return 0;
+}
+/* Configuracion de socket no bloqueante.
+ * Regresa 0 si jala -1 si truena.
+ */
+static int configurar_no_bloqueante(int descriptor)
+{
+    int opciones = fcntl(descriptor, F_GETFL, 0);
+
+    if (opciones == -1)
+    {
+        return -1;
+    }
+
+    return fcntl(descriptor, F_SETFL, opciones | O_NONBLOCK);
+}
+
+/* handle_new_connection, adaptado al proyecto, espero...*/
+static int servidor_aceptar_cliente(
+    int descriptor_escucha,
+    fd_set *conexiones,
+    int *descriptor_maximo)
+
+{
+    struct sockaddr_in direccion_cliente = {0};
+    socklen_t longitud = sizeof(direccion_cliente);
+
+    int descriptor_cliente = accept(
+        descriptor_escucha,
+        (struct sockaddr *)&direccion_cliente,
+        &longitud);
+
+    if (descriptor_cliente = -1)
+    {
+        if (errno == EINTR ||
+            errno == EAGAIN ||
+            errno == ECONNABORTED)
+        {
+            return 0;
+        }
+        perror("No se pudo aceptar la conexion");
+        return -1;
+    }
+
+    /* FD_SET admite solo descriptores menos que  FD_SESTIZE.
+     * comprueba el limite para agregar descriptor.
+     */
+    if (descriptor_cliente >= FD_SETSIZE)
+    {
+        fprintf(stderr, "El descriptor supera limite de select.\n");
+        return 0;
+    }
+
+    if (configurar_no_bloqueante(descriptor_cliente) == -1)
+    {
+        fprintf(stderr, "No se pudo configurar la conexion.\n");
+        close(descriptor_cliente);
+        return 0;
+    }
+    FD_SET(descriptor_cliente, conexiones);
+
+    if (descriptor_cliente > *descriptor_maximo)
+    {
+        *descriptor_maximo = descriptor_cliente;
+    }
+
+    pprintf("Conexion aceptad: %d. \n", descriptor_cliente);
+    fflush(stdout);
+
     return 0;
 }
 
@@ -118,7 +191,8 @@ int servidor_ejecutar(Servidor *servidor)
     {
         return -1;
     }
-    /* Anbre la escucha. */
+
+    /* Abre la escucha. */
     if (servidor_abrir_escucha(servidor) == -1)
     {
         return -1;
