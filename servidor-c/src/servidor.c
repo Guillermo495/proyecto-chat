@@ -52,7 +52,7 @@ Servidor *servidor_crear(uint16_t puerto)
     return servidor;
 }
 
-/* Adaptacion de respositorio.
+/* Adaptacion de selectserver.c de Brian Beej's.
  * Abre y configura la escucha.
  * Devuelve 0 si tiene exito o -1 hay un error.
  */
@@ -161,6 +161,7 @@ static int servidor_aceptar_cliente(
     if (descriptor_cliente >= FD_SETSIZE)
     {
         fprintf(stderr, "El descriptor supera limite de select.\n");
+        close(descriptor_cliente);
         return 0;
     }
 
@@ -177,13 +178,62 @@ static int servidor_aceptar_cliente(
         *descriptor_maximo = descriptor_cliente;
     }
 
-    pprintf("Conexion aceptad: %d. \n", descriptor_cliente);
+    printf("Conexion aceptada: %d. \n", descriptor_cliente);
     fflush(stdout);
 
     return 0;
 }
 
-/* Abre la escucha y retorna. */
+/* Adaptacion de handle_client_data.
+ *Recibe bytes y detecta que el cliente se desconecto.
+ */
+static void servidor_recibir_datos(
+    int descriptor_cliente,
+    fd_set *conexiones)
+{
+    char datos[4096];
+
+    ssize_t recibidos = recv(
+        descriptor_cliente,
+        datos,
+        sizeof(datos),
+        0);
+
+    if (recibidos > 0)
+    {
+        printf("Recibidos %zd bytes del descriptor %d. \n",
+               descriptor_cliente,
+               datos,
+               sizeof(datos),
+               0);
+        fflush(stdout);
+
+        return;
+    }
+
+    if (recibidos == -1)
+    {
+        if (errno == EINTR ||
+            errno == EAGAIN ||
+            errno == EWOULDBLOCK)
+        {
+            return;
+        }
+        perror("No se pudiero recibir datos.");
+    }
+    else
+    {
+        printf("Conexion finalizada %d\n", descriptor_cliente); /* recv() recibe 0 cuando el cliente
+         cierra su envio*/
+        fflush(stdout);
+    }
+    close(descriptor_cliente);
+    FD_CLR(descriptor_cliente, conexiones);
+}
+
+/* Adaptacion selectserver.c Brian Beej's.
+ * Vigila la escucha y las conexiones de los clientes en un solo hilo.
+ */
 int servidor_ejecutar(Servidor *servidor)
 {
     /* Rechaza una escucha inexistente o ya abierta*/
@@ -198,10 +248,99 @@ int servidor_ejecutar(Servidor *servidor)
         return -1;
     }
 
+    int descriptor_escucha = servidor->descriptor_escucha;
+
+    if (descriptor_escucha >= FD_SETSIZE)
+    {
+        fprintf(stderr, "La escucha supera el limite de select.\n");
+        return -1;
+    }
+
+    if (configurar_no_bloqueante(descriptor_escucha) == -1)
+    {
+        perror("No se pudo congifurar la escucha.");
+        return -1;
+    }
+    /* Conjunto permanente de descriptores que vigilamos. */
+    fd_set conexiones;
+    FD_ZERO(&conexiones);
+    FD_SET(descriptor_escucha, &conexiones);
+
+    int descriptor_maximo = descriptor_escucha;
+    int continuar = 1;
+
     printf(
         "Escucha preparada en el puerto %u.\n",
         (unsigned int)servidor->puerto);
-    return 0;
+    fflush(stdout);
+
+    /* Cambio de for(;;) a while(continuar).  */
+    while (continuar)
+    {
+        fd_set preparados = conexiones;
+
+        int resultado = select(
+            descriptor_maximo + 1,
+            &preparados,
+            NULL,
+            NULL,
+            NULL);
+
+        if (resultado == -1)
+        {
+            if (errno == EINTR)
+            {
+                continue;
+            }
+            perror("No se pudo esperar actiuvidad.");
+            break;
+        }
+        for (int descriptor = 0;
+             descriptor <= descriptor_maximo;
+             descriptor++)
+        {
+            if (!FD_ISSET(descriptor, &preparados))
+            {
+                continue;
+            }
+
+            if (descriptor == descriptor_escucha)
+            {
+                if (servidor_aceptar_cliente(
+                        descriptor_escucha,
+                        &conexiones,
+                        &descriptor_maximo) == -1)
+                {
+                    continuar = 0;
+                    break;
+                }
+            }
+            else
+            {
+                servidor_recibir_datos(descriptor, &conexiones);
+            }
+        }
+        /*Reduce el recorrido si cerramos los descriptores mayores. */
+        while (descriptor_maximo > descriptor_escucha &&
+               !FD_ISSET(descriptor_maximo, &conexiones))
+        {
+            descriptor_maximo--;
+        }
+    }
+
+    /* CIerrra los clientes si se abandona el ciclo por error. */
+    for (int descriptor = 0;
+         descriptor <= descriptor_maximo;
+         descriptor++)
+    {
+        if (descriptor != descriptor_escucha &&
+            FD_ISSET(descriptor, &conexiones))
+        {
+            close(descriptor);
+        }
+    }
+    /* main llama a servidor_destruir para cerrar la esuccha. */
+    return -1;
 }
 
 /* Cierra el socket y libera memoria del objeto.
