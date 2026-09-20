@@ -78,7 +78,7 @@ static int servidor_abrir_escucha(Servidor *servidor)
             &reutilizar,
             sizeof(reutilizar)) == -1)
     {
-        perror("No se pudo configurar el socket");
+        perror("No se pudo configurar el socket.");
         close(descriptor);
         return -1;
     }
@@ -97,7 +97,7 @@ static int servidor_abrir_escucha(Servidor *servidor)
             (struct sockaddr *)&direccion,
             sizeof(direccion)) == -1)
     {
-        perror("No se pudo asignar direccion ni puerto.");
+        perror("No se pudo asignar direccion ni el puerto.");
         close(descriptor);
         return -1;
     }
@@ -143,7 +143,7 @@ static int servidor_aceptar_cliente(
         (struct sockaddr *)&direccion_cliente,
         &longitud);
 
-    if (descriptor_cliente = -1)
+    if (descriptor_cliente == -1)
     {
         if (errno == EINTR ||
             errno == EAGAIN ||
@@ -202,10 +202,8 @@ static void servidor_recibir_datos(
     if (recibidos > 0)
     {
         printf("Recibidos %zd bytes del descriptor %d. \n",
-               descriptor_cliente,
-               datos,
-               sizeof(datos),
-               0);
+               recibidos,
+               descriptor_cliente); /* Correccion de compilación. */
         fflush(stdout);
 
         return;
@@ -223,7 +221,7 @@ static void servidor_recibir_datos(
     }
     else
     {
-        printf("Conexion finalizada %d\n", descriptor_cliente); /* recv() recibe 0 cuando el cliente
+        printf("Conexión finalizada %d\n", descriptor_cliente); /* recv() recibe 0 cuando el cliente
          cierra su envio*/
         fflush(stdout);
     }
@@ -231,12 +229,12 @@ static void servidor_recibir_datos(
     FD_CLR(descriptor_cliente, conexiones);
 }
 
-/* Adaptacion selectserver.c Brian Beej's.
+/* Adaptacion selectserver.c de Brian Beej's.
  * Vigila la escucha y las conexiones de los clientes en un solo hilo.
  */
 int servidor_ejecutar(Servidor *servidor)
 {
-    /* Rechaza una escucha inexistente o ya abierta*/
+    /* Rechaza una escucha inexistente o ya abierta. */
     if (servidor == NULL || servidor->descriptor_escucha != -1)
     {
         return -1;
@@ -252,13 +250,13 @@ int servidor_ejecutar(Servidor *servidor)
 
     if (descriptor_escucha >= FD_SETSIZE)
     {
-        fprintf(stderr, "La escucha supera el limite de select.\n");
+        fprintf(stderr, "La escucha supera el límite de select.\n");
         return -1;
     }
 
     if (configurar_no_bloqueante(descriptor_escucha) == -1)
     {
-        perror("No se pudo congifurar la escucha.");
+        perror("No se pudo configurar la escucha.");
         return -1;
     }
     /* Conjunto permanente de descriptores que vigilamos. */
@@ -292,7 +290,7 @@ int servidor_ejecutar(Servidor *servidor)
             {
                 continue;
             }
-            perror("No se pudo esperar actiuvidad.");
+            perror("No se pudo esperar actividad.");
             break;
         }
         for (int descriptor = 0;
@@ -320,7 +318,7 @@ int servidor_ejecutar(Servidor *servidor)
                 servidor_recibir_datos(descriptor, &conexiones);
             }
         }
-        /*Reduce el recorrido si cerramos los descriptores mayores. */
+        /* Reduce el recorrido si cerramos los descriptores mayores. */
         while (descriptor_maximo > descriptor_escucha &&
                !FD_ISSET(descriptor_maximo, &conexiones))
         {
@@ -328,7 +326,7 @@ int servidor_ejecutar(Servidor *servidor)
         }
     }
 
-    /* CIerrra los clientes si se abandona el ciclo por error. */
+    /* Cierra los clientes si se abandona el ciclo por error. */
     for (int descriptor = 0;
          descriptor <= descriptor_maximo;
          descriptor++)
@@ -339,7 +337,7 @@ int servidor_ejecutar(Servidor *servidor)
             close(descriptor);
         }
     }
-    /* main llama a servidor_destruir para cerrar la esuccha. */
+    /* main llama a servidor_destruir para cerrar la escucha. */
     return -1;
 }
 

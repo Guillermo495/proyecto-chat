@@ -10,5 +10,6 @@ TestResults/
 
 # Metadatos de carpetas de KDE.
 .directory
-# Configuracion de VS Code
+
+# Configuración de VS Code.
 .vscode/

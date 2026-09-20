@@ -35,7 +35,7 @@ int main(int cantidad_argumentos, char *argumentos[])
         puerto > 65535)
     {
         fprintf(stderr,
-                "Puerto inválido: debe ser un entero entre 1 y 65535.\n"); /* MEnsaje si el puerto ingresado no es valido. */
+                "Puerto inválido: debe ser un entero entre 1 y 65535.\n"); /* Mensaje si el puerto ingresado no es valido. */
         return EXIT_FAILURE;
     }
 
