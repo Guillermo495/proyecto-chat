@@ -4,11 +4,16 @@ CPPFLAGS += -Iservidor-c/include
 CFLAGS += -std=c11 -Wall -Wextra -Wpedantic
 
 DIRECTORIO_SALIDA = build
+
 SERVIDOR = $(DIRECTORIO_SALIDA)/servidor_chat
+
 PRUEBA = $(DIRECTORIO_SALIDA)/prueba_servidor
-FUENTES_SERVIDOR = servidor-c/src/main.c servidor-c/src/servidor.c
-FUENTES_PRUEBA = servidor-c/pruebas/prueba_servidor.c servidor-c/src/servidor.c
-CABECERAS = servidor-c/include/servidor.h
+
+FUENTES_SERVIDOR = servidor-c/src/main.c servidor-c/src/servidor.c servidor-c/src/cliente.c
+
+FUENTES_PRUEBA = servidor-c/pruebas/prueba_servidor.c servidor-c/src/servidor.c servidor-c/src/cliente.c
+
+CABECERAS = servidor-c/include/servidor.h servidor-c/include/cliente.h
 
 .PHONY: todo servidor pruebas limpiar
 
