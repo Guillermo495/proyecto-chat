@@ -3,6 +3,7 @@
  */
 
 #include "servidor.h"
+#include "cliente.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -91,7 +92,6 @@ static int servidor_abrir_escucha(Servidor *servidor)
     direccion.sin_addr.s_addr = htonl(INADDR_ANY);
     direccion.sin_port = htons(servidor->puerto);
 
-    /* une. */
     if (bind(
             descriptor,
             (struct sockaddr *)&direccion,
@@ -101,7 +101,7 @@ static int servidor_abrir_escucha(Servidor *servidor)
         close(descriptor);
         return -1;
     }
-    /* escucha. */
+
     if (listen(descriptor, SOMAXCONN) == -1)
     {
         perror("No se pudo iniciar la escucha.");
@@ -128,11 +128,12 @@ static int configurar_no_bloqueante(int descriptor)
     return fcntl(descriptor, F_SETFL, opciones | O_NONBLOCK);
 }
 
-/* handle_new_connection, adaptado al proyecto, espero...*/
+/* Adaptación de handle_new_connection(). */
 static int servidor_aceptar_cliente(
     int descriptor_escucha,
     fd_set *conexiones,
-    int *descriptor_maximo)
+    int *descriptor_maximo,
+    Cliente *clientes[])
 
 {
     struct sockaddr_in direccion_cliente = {0};
@@ -155,7 +156,7 @@ static int servidor_aceptar_cliente(
         return -1;
     }
 
-    /* FD_SET admite solo descriptores menos que  FD_SESTIZE.
+    /* FD_SET admite solo descriptores menos que FD_SESTIZE.
      * comprueba el limite para agregar descriptor.
      */
     if (descriptor_cliente >= FD_SETSIZE)
@@ -171,6 +172,19 @@ static int servidor_aceptar_cliente(
         close(descriptor_cliente);
         return 0;
     }
+
+    /* Crea el cliente relacionado a la conexion aceptada. */
+    Cliente *cliente = cliente_crear(descriptor_cliente);
+
+    if (cliente == NULL)
+    {
+        fprintf(stderr, "No se pudo crear el Cliente.\n");
+        close(descriptor_cliente);
+        return 0;
+    }
+    /* Guarda el cliente usando el descriptor como indice. */
+    clientes[descriptor_cliente] = cliente;
+
     FD_SET(descriptor_cliente, conexiones);
 
     if (descriptor_cliente > *descriptor_maximo)
@@ -189,7 +203,8 @@ static int servidor_aceptar_cliente(
  */
 static void servidor_recibir_datos(
     int descriptor_cliente,
-    fd_set *conexiones)
+    fd_set *conexiones,
+    Cliente *clientes[])
 {
     char datos[4096];
 
@@ -225,8 +240,10 @@ static void servidor_recibir_datos(
          cierra su envio*/
         fflush(stdout);
     }
-    close(descriptor_cliente);
+
     FD_CLR(descriptor_cliente, conexiones);
+    cliente_destruir(clientes[descriptor_cliente]);
+    clientes[descriptor_cliente] = NULL;
 }
 
 /* Adaptacion selectserver.c de Brian Beej's.
@@ -259,6 +276,10 @@ int servidor_ejecutar(Servidor *servidor)
         perror("No se pudo configurar la escucha.");
         return -1;
     }
+
+    /* Objetos cliente ubicados por el descriptor de su conexion. */
+    Cliente *clientes[FD_SETSIZE] = {0};
+
     /* Conjunto permanente de descriptores que vigilamos. */
     fd_set conexiones;
     FD_ZERO(&conexiones);
@@ -307,7 +328,8 @@ int servidor_ejecutar(Servidor *servidor)
                 if (servidor_aceptar_cliente(
                         descriptor_escucha,
                         &conexiones,
-                        &descriptor_maximo) == -1)
+                        &descriptor_maximo,
+                        clientes) == -1)
                 {
                     continuar = 0;
                     break;
@@ -315,7 +337,7 @@ int servidor_ejecutar(Servidor *servidor)
             }
             else
             {
-                servidor_recibir_datos(descriptor, &conexiones);
+                servidor_recibir_datos(descriptor, &conexiones, clientes);
             }
         }
         /* Reduce el recorrido si cerramos los descriptores mayores. */
@@ -334,7 +356,8 @@ int servidor_ejecutar(Servidor *servidor)
         if (descriptor != descriptor_escucha &&
             FD_ISSET(descriptor, &conexiones))
         {
-            close(descriptor);
+            cliente_destruir(clientes[descriptor]);
+            clientes[descriptor] = NULL;
         }
     }
     /* main llama a servidor_destruir para cerrar la escucha. */

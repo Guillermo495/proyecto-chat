@@ -5,18 +5,18 @@
 #include <stdlib.h>
 #include <unistd.h>
 
+/* Espacio inicial del bufer. */
 #define CAPACIDAD_INICIAL 4096
+
 struct Cliente
 {
     int descriptor;
-
-    int *datos;
-
+    char *datos;
     size_t utilizados;
-
     size_t capacidad;
 };
-/* Espacio inicial el búfer, no es el tamaño máximo del cliente. */
+
+/* Crea un cliente e inicializa su búfer de recepción. */
 Cliente *cliente_crear(int descriptor)
 {
     if (descriptor < 0)
@@ -48,6 +48,7 @@ Cliente *cliente_crear(int descriptor)
     return cliente;
 }
 
+/* Cierra la conexión y libera las dos reservas de memoria. */
 void cliente_destruir(Cliente *cliente)
 {
     if (cliente == NULL)
