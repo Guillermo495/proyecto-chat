@@ -15,6 +15,20 @@ FUENTES_PRUEBA = servidor-c/pruebas/prueba_servidor.c servidor-c/src/servidor.c 
 
 CABECERAS = servidor-c/include/servidor.h servidor-c/include/cliente.h
 
+CPPFLAGS += -Iservidor-c/externos/cjson
+
+FUENTES_SERVIDOR += servidor-c/externos/cjson/cJSON.c
+
+FUENTES_PRUEBA += servidor-c/externos/cjson/cJSON.c
+
+CABECERAS += servidor-c/externos/cjson/cJSON.h
+
+FUENTES_SERVIDOR += servidor-c/src/protocolo.c
+
+FUENTES_PRUEBA += servidor-c/src/protocolo.c
+
+CABECERAS += servidor-c/include/protocolo.h
+
 .PHONY: todo servidor pruebas limpiar
 
 todo: servidor

@@ -4,6 +4,7 @@
 
 #include "servidor.h"
 #include "cliente.h"
+#include "protocolo.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -203,7 +204,6 @@ static int servidor_aceptar_cliente(
 
 static int servidor_procesar_datos(
     Cliente *cliente,
-    int descriptor_cliente,
     const char *datos,
     size_t cantidad)
 {
@@ -255,15 +255,13 @@ static int servidor_procesar_datos(
         }
         const char *mensaje = cliente_obtener_datos(cliente);
 
-        /*Muestra solo los mensjaes que tienen datos. */
+        /* Muestra solo los mensajes que tienen datos. */
         if (mensaje[0] != '\0')
         {
-            printf(
-                "Mensaje del cliente %d: %s\n",
-                descriptor_cliente,
-                mensaje);
-
-            fflush(stdout);
+            if (protocolo_inspeccionar_mensaje(mensaje) == -1)
+            {
+                return -1;
+            }
         }
         cliente_limpiar_datos(cliente);
 
@@ -293,7 +291,6 @@ static void servidor_recibir_datos(
     {
         if (servidor_procesar_datos(
                 clientes[descriptor_cliente],
-                descriptor_cliente,
                 datos,
                 (size_t)recibidos) == -1)
         {
@@ -302,6 +299,10 @@ static void servidor_recibir_datos(
             cliente_destruir(clientes[descriptor_cliente]);
             clientes[descriptor_cliente] = NULL;
         }
+
+        printf("Cliente %d desconectado por mensaje inválido.\n",
+               descriptor_cliente);
+        fflush(stdout);
 
         return;
     }
