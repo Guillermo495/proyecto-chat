@@ -16,6 +16,8 @@
 #include <fcntl.h>
 #include <sys/select.h>
 
+#include <string.h>
+
 struct Servidor
 {
     /* Puerto donde escuchará el servidor. */
@@ -182,6 +184,7 @@ static int servidor_aceptar_cliente(
         close(descriptor_cliente);
         return 0;
     }
+
     /* Guarda el cliente usando el descriptor como indice. */
     clientes[descriptor_cliente] = cliente;
 
@@ -195,6 +198,78 @@ static int servidor_aceptar_cliente(
     printf("Conexion aceptada: %d. \n", descriptor_cliente);
     fflush(stdout);
 
+    return 0;
+}
+
+static int servidor_procesar_datos(
+    Cliente *cliente,
+    int descriptor_cliente,
+    const char *datos,
+    size_t cantidad)
+{
+    if (cliente == NULL)
+    {
+        return -1;
+    }
+
+    size_t posicion = 0;
+
+    while (posicion < cantidad)
+    {
+        const char *inicio = datos + posicion;
+        size_t pendientes = cantidad - posicion;
+
+        /* Busca el final del siguiente mensaje en esta lectura. */
+        const char *salto = memchr(inicio, '\n', pendientes);
+
+        size_t longitud_fragmento = pendientes;
+
+        if (salto != NULL)
+        {
+            longitud_fragmento = (size_t)(salto - inicio);
+        }
+
+        /* El protocolo no permite bytes nulos en los mensajes. */
+        if (memchr(inicio, '\0', longitud_fragmento) != NULL)
+        {
+            fprintf(stderr, "El mensaje contiene un byte nulo.\n");
+            return -1;
+        }
+
+        if (cliente_agregar_datos(
+                cliente,
+                inicio,
+                longitud_fragmento) == -1)
+        {
+            fprintf(stderr,
+                    "No se pudoalmacenar el fragmento del mensaje.\n");
+            return -1;
+        }
+
+        posicion += longitud_fragmento;
+
+        /* Conserva el fragmento hasta que llegue el salto de linea. */
+        if (salto == NULL)
+        {
+            return 0;
+        }
+        const char *mensaje = cliente_obtener_datos(cliente);
+
+        /*Muestra solo los mensjaes que tienen datos. */
+        if (mensaje[0] != '\0')
+        {
+            printf(
+                "Mensaje del cliente %d: %s\n",
+                descriptor_cliente,
+                mensaje);
+
+            fflush(stdout);
+        }
+        cliente_limpiar_datos(cliente);
+
+        /* Avanza sobre el salto de linea encontrado. */
+        posicion++;
+    }
     return 0;
 }
 
@@ -216,10 +291,17 @@ static void servidor_recibir_datos(
 
     if (recibidos > 0)
     {
-        printf("Recibidos %zd bytes del descriptor %d. \n",
-               recibidos,
-               descriptor_cliente); /* Correccion de compilación. */
-        fflush(stdout);
+        if (servidor_procesar_datos(
+                clientes[descriptor_cliente],
+                descriptor_cliente,
+                datos,
+                (size_t)recibidos) == -1)
+        {
+            FD_CLR(descriptor_cliente, conexiones);
+
+            cliente_destruir(clientes[descriptor_cliente]);
+            clientes[descriptor_cliente] = NULL;
+        }
 
         return;
     }

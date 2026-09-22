@@ -5,6 +5,8 @@
 #include <stdlib.h>
 #include <unistd.h>
 
+#include <string.h>
+
 /* Espacio inicial del bufer. */
 #define CAPACIDAD_INICIAL 4096
 
@@ -17,7 +19,7 @@ struct Cliente
 {
     int descriptor;
     char *datos;
-    size_t utilizados;
+    size_t bytes_utilizados;
     size_t capacidad;
 };
 
@@ -47,8 +49,9 @@ Cliente *cliente_crear(int descriptor)
     }
 
     cliente->descriptor = descriptor;
-    cliente->utilizados = 0;
+    cliente->bytes_utilizados = 0;
     cliente->capacidad = CAPACIDAD_INICIAL;
+    cliente->datos[0] = '\0';
 
     return cliente;
 }
@@ -110,6 +113,81 @@ int cliente_reservar(Cliente *cliente, size_t bytes_necesarios)
     cliente->capacidad = nueva_capacidad;
 
     return 0;
+}
+
+/*
+ * Agrega los bytes recibidos al final del búfer del cliente.
+ * Amplía el espacio si hace falta, sin superar el tamaño máximo
+ * permitido, y coloca '\0' después de los datos almacenados.
+ *
+ * Devuelve 0 si tiene éxito o -1 si ocurre un error.
+ */
+int cliente_agregar_datos(
+    Cliente *cliente,
+    const char *datos,
+    size_t cantidad)
+{
+    if (cliente == NULL)
+    {
+        return -1;
+    }
+
+    /* Un fragmento vacio no cambia el contenido el bufer. */
+    if (cantidad == 0)
+    {
+        return 0;
+    }
+
+    if (datos == 0)
+    {
+        return -1;
+    }
+
+    /* Comprueba el límite antes de sumar los tamaños. */
+    if (cantidad > TAMANO_MAXIMO_MENSAJE - cliente->bytes_utilizados)
+    {
+        return -1;
+    }
+    size_t total = cliente->bytes_utilizados + cantidad;
+
+    /* Deja espacio para los datos y el carácter nulo '\0'. */
+    if (cliente_reservar(cliente, total + 1) == -1)
+    {
+        return -1;
+    }
+
+    /* Copia el fragmenteo despues de los bytes ya almacenados. */
+    memcpy(
+        cliente->datos + cliente->bytes_utilizados,
+        datos,
+        cantidad);
+
+    /* Registra el nuevo tamaño y coloca el carácter nulo '\0'. */
+    cliente->bytes_utilizados = total;
+    cliente->datos[total] = '\0';
+
+    return 0;
+}
+
+/*  */
+const char *cliente_obtener_datos(const Cliente *cliente)
+{
+    if (cliente == NULL)
+    {
+        return NULL;
+    }
+    return cliente->datos;
+}
+
+void cliente_limpiar_datos(Cliente *cliente)
+{
+    if (cliente == NULL)
+    {
+        return;
+    }
+
+    cliente->bytes_utilizados = 0;
+    cliente->datos[0] = '\0';
 }
 
 /* Cierra la conexión y libera las dos reservas de memoria. */
