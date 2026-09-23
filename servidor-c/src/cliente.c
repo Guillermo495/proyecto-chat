@@ -15,12 +15,18 @@
 /* Manejo del caracter nulo '\0'. */
 #define CAPACIDAD_MAXIMA (TAMANO_MAXIMO_MENSAJE + 1)
 
+/* Limite de memoria para las respuestas pendientes de un cliente. */
+#define MAXIMA_SALIDA_PENDIENTE ((size_t)8 * 1024 * 1024)
+
 struct Cliente
 {
     int descriptor;
     char *datos;
     size_t bytes_utilizados;
     size_t capacidad;
+    char *salida;
+    size_t bytes_salida;
+    size_t bytes_enviados;
 };
 
 /* Crea un cliente e inicializa su búfer de recepción. */
@@ -52,6 +58,10 @@ Cliente *cliente_crear(int descriptor)
     cliente->bytes_utilizados = 0;
     cliente->capacidad = CAPACIDAD_INICIAL;
     cliente->datos[0] = '\0';
+
+    cliente->salida = NULL;
+    cliente->bytes_salida = 0;
+    cliente->bytes_enviados = 0;
 
     return cliente;
 }
@@ -204,5 +214,73 @@ void cliente_destruir(Cliente *cliente)
     }
 
     free(cliente->datos);
+    free(cliente->salida);
     free(cliente);
+}
+
+/*
+ * Conserva los bytes que faltan por enviar y agrega otro mensaje.
+ * El terminador '\0' no se incluye en la salida.
+ */
+int cliente_encolar_mensaje(Cliente *cliente, const char *mensaje)
+{
+    if (cliente == NULL || mensaje == NULL)
+    {
+        return -1;
+    }
+
+    size_t longitud = strlen(mensaje);
+
+    if (longitud > TAMANO_MAXIMO_MENSAJE)
+    {
+        return -1;
+    }
+
+    size_t pendientes =
+        cliente->bytes_salida - cliente->bytes_enviados;
+
+    /* Incluye un byte para el salto de línea del protocolo. */
+    size_t adicionales = longitud + 1;
+
+    if (adicionales > MAXIMA_SALIDA_PENDIENTE - pendientes)
+    {
+        return -1;
+    }
+
+    size_t total = pendientes + adicionales;
+
+    /*
+     * Prepara una nueva reserva antes de modificar la salida actual.
+     * Si falla, los datos anteriores permanecen intactos.
+     */
+    char *nueva_salida = malloc(total);
+
+    if (nueva_salida == NULL)
+    {
+        return -1;
+    }
+
+    /* Conserva únicamente la parte que todavía no se ha enviado. */
+    if (pendientes > 0)
+    {
+        memcpy(
+            nueva_salida,
+            cliente->salida + cliente->bytes_enviados,
+            pendientes);
+    }
+
+    memcpy(
+        nueva_salida + pendientes,
+        mensaje,
+        longitud);
+
+    nueva_salida[total - 1] = '\n';
+
+    free(cliente->salida);
+
+    cliente->salida = nueva_salida;
+    cliente->bytes_salida = total;
+    cliente->bytes_enviados = 0;
+
+    return 0;
 }

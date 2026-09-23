@@ -298,12 +298,12 @@ static void servidor_recibir_datos(
 
             cliente_destruir(clientes[descriptor_cliente]);
             clientes[descriptor_cliente] = NULL;
+
+            printf(
+                "Cliente %d desconectado por mensaje inválido.\n",
+                descriptor_cliente);
+            fflush(stdout);
         }
-
-        printf("Cliente %d desconectado por mensaje inválido.\n",
-               descriptor_cliente);
-        fflush(stdout);
-
         return;
     }
 

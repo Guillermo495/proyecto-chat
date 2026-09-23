@@ -175,7 +175,9 @@ int protocolo_inspeccionar_mensaje(const char *mensaje)
     cJSON_Delete(objeto);
     return 0;
 
-    printf("Tipo de mensaje: %s\n", tipo->valuestring);
+    printf("Campos comprobados para: %s\n",
+           tipo->valuestring);
+
     fflush(stdout);
 
     /* Libera el objeto y todos los campos que contiene. */

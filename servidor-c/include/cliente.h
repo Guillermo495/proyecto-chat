@@ -39,4 +39,9 @@ const char *cliente_obtener_datos(const Cliente *cliente);
  */
 void cliente_limpiar_datos(Cliente *cliente);
 
+/* Guarda un mensaje para enviarlo y agrega el salto de linea.
+ * Recibe una cadena sin '\n'.
+ */
+int cliente_encolar_mensaje(Cliente *cliente, const char *mensaje);
+
 #endif
