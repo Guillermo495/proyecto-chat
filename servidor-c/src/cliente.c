@@ -7,6 +7,9 @@
 
 #include <string.h>
 
+#include <errno.h>
+#include <sys/socket.h>
+
 /* Espacio inicial del bufer. */
 #define CAPACIDAD_INICIAL 4096
 
@@ -281,6 +284,65 @@ int cliente_encolar_mensaje(Cliente *cliente, const char *mensaje)
     cliente->salida = nueva_salida;
     cliente->bytes_salida = total;
     cliente->bytes_enviados = 0;
+
+    return 0;
+}
+
+int cliente_tiene_salida_pendiente(const Cliente *cliente)
+{
+    return cliente != NULL &&
+           cliente->bytes_enviados < cliente->bytes_salida;
+}
+
+/* Intenta enviar lo pendiente y conserva los bytes que falten. */
+int cliente_enviar_pendientes(Cliente *cliente)
+{
+    if (cliente == NULL)
+    {
+        return -1;
+    }
+
+    if (!cliente_tiene_salida_pendiente(cliente))
+    {
+        return 0;
+    }
+
+    size_t pendientes =
+        cliente->bytes_salida - cliente->bytes_enviados;
+
+    ssize_t enviados = send(
+        cliente->descriptor,
+        cliente->salida + cliente->bytes_enviados,
+        pendientes,
+        MSG_NOSIGNAL);
+
+    if (enviados == -1)
+    {
+        if (errno == EAGAIN ||
+            errno == EWOULDBLOCK ||
+            errno == EINTR)
+        {
+            return 0;
+        }
+
+        perror("No se pudo enviar la respuesta al cliente");
+        return -1;
+    }
+
+    if (enviados == 0)
+    {
+        return -1;
+    }
+
+    cliente->bytes_enviados += (size_t)enviados;
+
+    if (cliente->bytes_enviados == cliente->bytes_salida)
+    {
+        free(cliente->salida);
+        cliente->salida = NULL;
+        cliente->bytes_salida = 0;
+        cliente->bytes_enviados = 0;
+    }
 
     return 0;
 }

@@ -376,15 +376,33 @@ int servidor_ejecutar(Servidor *servidor)
         (unsigned int)servidor->puerto);
     fflush(stdout);
 
-    /* Cambio de for(;;) a while(continuar).  */
+    /* Cambio de for(;;) a while(continuar).
+     * Ademas de recibir datos, permite enviar los mensajes pendientes
+     * cuando el socket esta listo para escribir.
+     */
     while (continuar)
     {
         fd_set preparados = conexiones;
+        fd_set escritura;
+
+        FD_ZERO(&escritura);
+
+        /* Vigila la escritura solo cuando hay bytes pendientes. */
+        for (int descriptor = 0;
+             descriptor <= descriptor_maximo;
+             descriptor++)
+        {
+            if (clientes[descriptor] != NULL &&
+                cliente_tiene_salida_pendiente(clientes[descriptor]))
+            {
+                FD_SET(descriptor, &escritura);
+            }
+        }
 
         int resultado = select(
             descriptor_maximo + 1,
             &preparados,
-            NULL,
+            &escritura,
             NULL,
             NULL);
 
@@ -401,28 +419,78 @@ int servidor_ejecutar(Servidor *servidor)
              descriptor <= descriptor_maximo;
              descriptor++)
         {
-            if (!FD_ISSET(descriptor, &preparados))
+            /* La esuccha solo se atiende para aceptar conexiones. */
+            if (descriptor == descriptor_escucha)
+            {
+                if (FD_ISSET(descriptor, &preparados))
+                {
+                    if (servidor_aceptar_cliente(
+                            descriptor_escucha,
+                            &conexiones,
+                            &descriptor_maximo,
+                            clientes) == -1)
+                    {
+                        continuar = 0;
+                        break;
+                    }
+                }
+                continue;
+            }
+
+            if (clientes[descriptor] == NULL)
             {
                 continue;
             }
 
-            if (descriptor == descriptor_escucha)
+            if (FD_ISSET(descriptor, &preparados))
             {
-                if (servidor_aceptar_cliente(
-                        descriptor_escucha,
-                        &conexiones,
-                        &descriptor_maximo,
-                        clientes) == -1)
+                servidor_recibir_datos(
+                    descriptor,
+                    &conexiones,
+                    clientes);
+            }
+
+            /* La recepcion pudo cerrar y destruir al cliente. */
+            if (clientes[descriptor] == NULL)
+            {
+                continue;
+            }
+
+            if (FD_ISSET(descriptor, &escritura))
+            {
+                if (cliente_enviar_pendientes(
+                        clientes[descriptor]) == -1)
                 {
-                    continuar = 0;
-                    break;
+                    FD_CLR(descriptor, &conexiones);
+                    cliente_destruir(clientes[descriptor]);
+                    clientes[descriptor] = NULL;
+
+                    fprintf(
+                        stderr,
+                        "Cliente %d desconectado por error de envío.\n",
+                        descriptor);
                 }
             }
-            else
+        }
+
+        /*if (descriptor == descriptor_escucha)
+        {
+            if (servidor_aceptar_cliente(
+                    descriptor_escucha,
+                    &conexiones,
+                    &descriptor_maximo,
+                    clientes) == -1)
             {
-                servidor_recibir_datos(descriptor, &conexiones, clientes);
+                continuar = 0;
+                break;
             }
         }
+        else
+        {
+            servidor_recibir_datos(descriptor, &conexiones, clientes);
+        }
+        */
+
         /* Reduce el recorrido si cerramos los descriptores mayores. */
         while (descriptor_maximo > descriptor_escucha &&
                !FD_ISSET(descriptor_maximo, &conexiones))

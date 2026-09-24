@@ -44,4 +44,10 @@ void cliente_limpiar_datos(Cliente *cliente);
  */
 int cliente_encolar_mensaje(Cliente *cliente, const char *mensaje);
 
+/* Indica si aun quedan bytes por enviar. */
+int cliente_tiene_salida_pendiente(const Cliente *cliente);
+
+/* Intenta enviar los bytes pendientes sin bloquear. */
+int cliente_enviar_pendientes(Cliente *cliente);
+
 #endif
