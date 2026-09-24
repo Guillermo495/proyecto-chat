@@ -50,4 +50,16 @@ int cliente_tiene_salida_pendiente(const Cliente *cliente);
 /* Intenta enviar los bytes pendientes sin bloquear. */
 int cliente_enviar_pendientes(Cliente *cliente);
 
+/* Marca la conexión para cerrarla después de enviar lo pendiente. */
+void cliente_programar_cierre(Cliente *cliente);
+
+/* Indica si la conexión está esperando su cierre. */
+int cliente_tiene_cierre_pendiente(const Cliente *cliente);
+
+/* Devuelve el nombre registrado o NULL si falta identificar al cliente. */
+const char *cliente_obtener_nombre(const Cliente *cliente);
+
+/* Guarda el nombre. Devuelve -1 si ya existe o falla la reserva. */
+int cliente_identificar(Cliente *cliente, const char *nombre);
+
 #endif

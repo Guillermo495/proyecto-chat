@@ -30,6 +30,8 @@ struct Cliente
     char *salida;
     size_t bytes_salida;
     size_t bytes_enviados;
+    int cierre_pendiente;
+    char *nombre;
 };
 
 /* Crea un cliente e inicializa su búfer de recepción. */
@@ -65,6 +67,9 @@ Cliente *cliente_crear(int descriptor)
     cliente->salida = NULL;
     cliente->bytes_salida = 0;
     cliente->bytes_enviados = 0;
+
+    cliente->cierre_pendiente = 0;
+    cliente->nombre = NULL;
 
     return cliente;
 }
@@ -218,6 +223,7 @@ void cliente_destruir(Cliente *cliente)
 
     free(cliente->datos);
     free(cliente->salida);
+    free(cliente->nombre);
     free(cliente);
 }
 
@@ -344,5 +350,48 @@ int cliente_enviar_pendientes(Cliente *cliente)
         cliente->bytes_enviados = 0;
     }
 
+    return 0;
+}
+
+/* Marca la conexión para cerrarla después de enviar lo pendiente. */
+void cliente_programar_cierre(Cliente *cliente)
+{
+    if (cliente == NULL)
+    {
+        return;
+    }
+
+    cliente->cierre_pendiente = 1;
+}
+
+/* Indica si la conexión está esperando su cierre. */
+int cliente_tiene_cierre_pendiente(const Cliente *cliente)
+{
+    return cliente != NULL && cliente->cierre_pendiente;
+}
+
+const char *cliente_obtener_nombre(const Cliente *cliente)
+{
+    return cliente == NULL ? NULL : cliente->nombre;
+}
+
+int cliente_identificar(Cliente *cliente, const char *nombre)
+{
+    if (cliente == NULL || nombre == NULL ||
+        nombre[0] == '\0' || cliente->nombre != NULL)
+    {
+        return -1;
+    }
+
+    size_t longitud = strlen(nombre);
+    char *copia = malloc(longitud + 1);
+
+    if (copia == NULL)
+    {
+        return -1;
+    }
+
+    memcpy(copia, nombre, longitud + 1);
+    cliente->nombre = copia;
     return 0;
 }

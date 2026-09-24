@@ -2,11 +2,19 @@
 #define CHAT_PROTOCOLO_H
 
 /*
- * Interpreta un mensaje JSON y muestra su campo "type".
- *
- * Devuelve 0 si el mensaje es un objeto con "type" de texto,
- * o -1 si no cumple esas condiciones.
+ * Comprueba el mensaje. Si es IDENTIFY, entrega una copia de username.
  */
-int protocolo_inspeccionar_mensaje(const char *mensaje);
+int protocolo_inspeccionar_mensaje(
+    const char *mensaje,
+    char **nombre_identificacion);
+
+/*
+ * Construye una respuesta JSON.
+ * Devuelve una cadena que el llamador debe liberar con free().
+ */
+char *protocolo_crear_respuesta(
+    const char *operacion,
+    const char *resultado,
+    const char *extra);
 
 #endif

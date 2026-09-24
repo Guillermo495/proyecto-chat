@@ -202,10 +202,51 @@ static int servidor_aceptar_cliente(
     return 0;
 }
 
+/*
+ * Guarda la respuesta de error y programa el cierre.
+ * Devuelve -1 si no pudo guardar la respuesta.
+ */
+static int servidor_rechazar_mensaje(Cliente *cliente)
+{
+    const char *respuesta =
+        "{\"type\":\"RESPONSE\","
+        "\"operation\":\"INVALID\","
+        "\"result\":\"INVALID\"}";
+
+    if (cliente_encolar_mensaje(cliente, respuesta) == -1)
+    {
+        return -1;
+    }
+
+    cliente_programar_cierre(cliente);
+    return 0;
+}
+
+/* Busca el nombre entre los clientes ya identificados. */
+static int servidor_nombre_ocupado(
+    Cliente *clientes[],
+    const char *nombre)
+{
+    for (int descriptor = 0; descriptor < FD_SETSIZE; descriptor++)
+    {
+        const char *registrado =
+            cliente_obtener_nombre(clientes[descriptor]);
+
+        if (registrado != NULL &&
+            strcmp(registrado, nombre) == 0)
+        {
+            return 1;
+        }
+    }
+
+    return 0;
+}
+
 static int servidor_procesar_datos(
     Cliente *cliente,
     const char *datos,
-    size_t cantidad)
+    size_t cantidad,
+    Cliente *clientes[])
 {
     if (cliente == NULL)
     {
@@ -258,9 +299,72 @@ static int servidor_procesar_datos(
         /* Muestra solo los mensajes que tienen datos. */
         if (mensaje[0] != '\0')
         {
-            if (protocolo_inspeccionar_mensaje(mensaje) == -1)
+            char *nombre = NULL;
+            if (protocolo_inspeccionar_mensaje(mensaje, &nombre) == -1)
             {
-                return -1;
+                return servidor_rechazar_mensaje(cliente);
+            }
+
+            if (nombre != NULL)
+            {
+                const char *resultado;
+
+                if (cliente_obtener_nombre(cliente) != NULL)
+                {
+                    free(nombre);
+                    return servidor_rechazar_mensaje(cliente);
+                }
+
+                if (servidor_nombre_ocupado(clientes, nombre))
+                {
+                    resultado = "USER_ALREADY_EXISTS";
+                }
+                else
+                {
+                    if (cliente_identificar(cliente, nombre) == -1)
+                    {
+                        free(nombre);
+                        return -1;
+                    }
+
+                    resultado = "SUCCESS";
+                }
+
+                /* Construye la respuesta para la solicitud de identificacion. */
+                char *respuesta = protocolo_crear_respuesta(
+                    "IDENTIFY", resultado, nombre);
+
+                free(nombre);
+
+                if (respuesta == NULL)
+                {
+                    return -1;
+                }
+
+                int encolado =
+                    cliente_encolar_mensaje(cliente, respuesta);
+
+                free(respuesta);
+
+                if (encolado == -1)
+                {
+                    return -1;
+                }
+            }
+            else if (cliente_obtener_nombre(cliente) == NULL)
+            {
+                const char *respuesta =
+                    "{\"type\":\"RESPONSE\","
+                    "\"operation\":\"INVALID\","
+                    "\"result\":\"NOT_IDENTIFIED\"}";
+
+                if (cliente_encolar_mensaje(cliente, respuesta) == -1)
+                {
+                    return -1;
+                }
+
+                cliente_programar_cierre(cliente);
+                return 0;
             }
         }
         cliente_limpiar_datos(cliente);
@@ -292,7 +396,7 @@ static void servidor_recibir_datos(
         if (servidor_procesar_datos(
                 clientes[descriptor_cliente],
                 datos,
-                (size_t)recibidos) == -1)
+                (size_t)recibidos, clientes) == -1)
         {
             FD_CLR(descriptor_cliente, conexiones);
 
@@ -392,12 +496,31 @@ int servidor_ejecutar(Servidor *servidor)
              descriptor <= descriptor_maximo;
              descriptor++)
         {
+            Cliente *cliente = clientes[descriptor];
+            if (cliente == NULL)
+            {
+                continue;
+            }
+
+            /* Mienteas espera el cierre solo termina de enviar. */
+
+            if (cliente_tiene_cierre_pendiente(cliente))
+            {
+                FD_CLR(descriptor, &preparados);
+            }
+
+            if (cliente_tiene_salida_pendiente(cliente))
+            {
+                FD_SET(descriptor, &escritura);
+            }
+        }
+        /*{
             if (clientes[descriptor] != NULL &&
                 cliente_tiene_salida_pendiente(clientes[descriptor]))
             {
                 FD_SET(descriptor, &escritura);
             }
-        }
+        }*/
 
         int resultado = select(
             descriptor_maximo + 1,
@@ -469,7 +592,21 @@ int servidor_ejecutar(Servidor *servidor)
                         stderr,
                         "Cliente %d desconectado por error de envío.\n",
                         descriptor);
+
+                    continue;
                 }
+            }
+            /* La respuesta ya salio de la cola; ahora puede cerrarse. */
+            if (cliente_tiene_cierre_pendiente(clientes[descriptor]) &&
+                !cliente_tiene_salida_pendiente(clientes[descriptor]))
+            {
+                FD_CLR(descriptor, &conexiones);
+                cliente_destruir(clientes[descriptor]);
+                clientes[descriptor] = NULL;
+
+                printf(
+                    "Cliente %d desconectado despues de enviar la respuesta.\n", descriptor);
+                fflush(stdout);
             }
         }
 

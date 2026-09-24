@@ -4,6 +4,8 @@
 #include <stdio.h>
 #include <string.h>
 
+#include <stdlib.h>
+
 /*
  * Comprueba que un campo exista y contenga texto.
  * Devuelve 1 si cumple esas condiciones o 0 si no las cumple.
@@ -121,11 +123,17 @@ static int protocolo_validar_campos(
  * Basado en el ejemplo de lectura de campos del README de cJSON.
  * Comprueba el campo "type" en lugar del campo "name" del ejemplo.
  */
-int protocolo_inspeccionar_mensaje(const char *mensaje)
+int protocolo_inspeccionar_mensaje(const char *mensaje, char **nombre_identificacion)
 {
     if (mensaje == NULL)
     {
         return -1;
+    }
+
+    if (nombre_identificacion != NULL)
+
+    {
+        *nombre_identificacion = NULL;
     }
 
     /* Rechaza texto sobrante después del JSON. */
@@ -166,6 +174,34 @@ int protocolo_inspeccionar_mensaje(const char *mensaje)
         return -1;
     }
 
+    /* Copia el nombre antes de liberar el objeto JSON. */
+    if (nombre_identificacion != NULL &&
+        strcmp(tipo->valuestring, "IDENTIFY") == 0)
+    {
+        const cJSON *campo = cJSON_GetObjectItemCaseSensitive(
+            objeto, "username");
+
+        const char *nombre = campo->valuestring;
+        size_t longitud = strlen(nombre);
+
+        if (longitud == 0)
+        {
+            cJSON_Delete(objeto);
+            return -1;
+        }
+
+        char *copia = malloc(longitud + 1);
+
+        if (copia == NULL)
+        {
+            cJSON_Delete(objeto);
+            return -1;
+        }
+
+        memcpy(copia, nombre, longitud + 1);
+        *nombre_identificacion = copia;
+    }
+
     printf(
         "Campos comprobados para: %s\n",
         tipo->valuestring);
@@ -184,4 +220,37 @@ int protocolo_inspeccionar_mensaje(const char *mensaje)
     cJSON_Delete(objeto);
 
     return 0;
+}
+
+char *protocolo_crear_respuesta(
+    const char *operacion,
+    const char *resultado,
+    const char *extra)
+{
+    if (operacion == NULL || resultado == NULL)
+    {
+        return NULL;
+    }
+
+    cJSON *objeto = cJSON_CreateObject();
+
+    if (objeto == NULL)
+    {
+        return NULL;
+    }
+
+    if (cJSON_AddStringToObject(objeto, "type", "RESPONSE") == NULL ||
+        cJSON_AddStringToObject(objeto, "operation", operacion) == NULL ||
+        cJSON_AddStringToObject(objeto, "result", resultado) == NULL ||
+        (extra != NULL &&
+         cJSON_AddStringToObject(objeto, "extra", extra) == NULL))
+    {
+        cJSON_Delete(objeto);
+        return NULL;
+    }
+
+    char *respuesta = cJSON_PrintUnformatted(objeto);
+    cJSON_Delete(objeto);
+
+    return respuesta;
 }
