@@ -123,17 +123,11 @@ static int protocolo_validar_campos(
  * Basado en el ejemplo de lectura de campos del README de cJSON.
  * Comprueba el campo "type" en lugar del campo "name" del ejemplo.
  */
-int protocolo_inspeccionar_mensaje(const char *mensaje, char **nombre_identificacion)
+MensajeProtocolo *protocolo_interpretar_mensaje(const char *mensaje)
 {
     if (mensaje == NULL)
     {
-        return -1;
-    }
-
-    if (nombre_identificacion != NULL)
-
-    {
-        *nombre_identificacion = NULL;
+        return NULL;
     }
 
     /* Rechaza texto sobrante después del JSON. */
@@ -142,7 +136,7 @@ int protocolo_inspeccionar_mensaje(const char *mensaje, char **nombre_identifica
     if (objeto == NULL)
     {
         fprintf(stderr, "No se pudo interpretar el mensaje JSON.\n");
-        return -1;
+        return NULL;
     }
 
     /* El protocolo requiere un objeto, no un arreglo u otro valor. */
@@ -150,7 +144,7 @@ int protocolo_inspeccionar_mensaje(const char *mensaje, char **nombre_identifica
     {
         fprintf(stderr, "El mensaje debe ser un objeto JSON.\n");
         cJSON_Delete(objeto);
-        return -1;
+        return NULL;
     }
 
     const cJSON *tipo = cJSON_GetObjectItemCaseSensitive(
@@ -161,7 +155,7 @@ int protocolo_inspeccionar_mensaje(const char *mensaje, char **nombre_identifica
     {
         fprintf(stderr, "El campo \"type\" debe contener texto.\n");
         cJSON_Delete(objeto);
-        return -1;
+        return NULL;
     }
 
     if (!protocolo_validar_campos(objeto, tipo->valuestring))
@@ -171,55 +165,41 @@ int protocolo_inspeccionar_mensaje(const char *mensaje, char **nombre_identifica
             "Operación desconocida o campos incorrectos.\n");
 
         cJSON_Delete(objeto);
-        return -1;
+        return NULL;
     }
 
-    /* Copia el nombre antes de liberar el objeto JSON. */
-    if (nombre_identificacion != NULL &&
-        strcmp(tipo->valuestring, "IDENTIFY") == 0)
+    /* IDENTIFY requiere un nombre que no esté vacío. */
+    if (strcmp(tipo->valuestring, "IDENTIFY") == 0 &&
+        protocolo_obtener_texto(objeto, "username")[0] == '\0')
     {
-        const cJSON *campo = cJSON_GetObjectItemCaseSensitive(
-            objeto, "username");
-
-        const char *nombre = campo->valuestring;
-        size_t longitud = strlen(nombre);
-
-        if (longitud == 0)
-        {
-            cJSON_Delete(objeto);
-            return -1;
-        }
-
-        char *copia = malloc(longitud + 1);
-
-        if (copia == NULL)
-        {
-            cJSON_Delete(objeto);
-            return -1;
-        }
-
-        memcpy(copia, nombre, longitud + 1);
-        *nombre_identificacion = copia;
+        cJSON_Delete(objeto);
+        return NULL;
     }
 
-    printf(
-        "Campos comprobados para: %s\n",
-        tipo->valuestring);
-
+    printf("Campos comprobados para: %s\n", tipo->valuestring);
     fflush(stdout);
+    return objeto;
+}
 
+const char *protocolo_obtener_texto(
+    const MensajeProtocolo *mensaje, const char *campo)
+{
+    const cJSON *valor = cJSON_GetObjectItemCaseSensitive(mensaje, campo);
+    return cJSON_IsString(valor) ? valor->valuestring : NULL;
+}
+
+/* Libera el objeto y todos los campos que contiene. */
+void protocolo_liberar_mensaje(MensajeProtocolo *mensaje)
+{
+    cJSON_Delete(mensaje);
+}
+
+/* Convierte el objeto a texto y libera el objeto, incluso si falla. */
+static char *protocolo_serializar(cJSON *objeto)
+{
+    char *texto = cJSON_PrintUnformatted(objeto);
     cJSON_Delete(objeto);
-    return 0;
-
-    printf("Campos comprobados para: %s\n",
-           tipo->valuestring);
-
-    fflush(stdout);
-
-    /* Libera el objeto y todos los campos que contiene. */
-    cJSON_Delete(objeto);
-
-    return 0;
+    return texto;
 }
 
 char *protocolo_crear_respuesta(
@@ -249,8 +229,58 @@ char *protocolo_crear_respuesta(
         return NULL;
     }
 
-    char *respuesta = cJSON_PrintUnformatted(objeto);
-    cJSON_Delete(objeto);
+    return protocolo_serializar(objeto);
+}
 
-    return respuesta;
+char *protocolo_crear_texto(
+    const char *tipo, const char *nombre, const char *texto)
+{
+    if (tipo == NULL || nombre == NULL || texto == NULL)
+    {
+        return NULL;
+    }
+    cJSON *objeto = cJSON_CreateObject();
+    if (objeto == NULL)
+    {
+        return NULL;
+    }
+    if (cJSON_AddStringToObject(objeto, "type", tipo) == NULL ||
+        cJSON_AddStringToObject(objeto, "username", nombre) == NULL ||
+        cJSON_AddStringToObject(objeto, "text", texto) == NULL)
+    {
+        cJSON_Delete(objeto);
+        return NULL;
+    }
+    return protocolo_serializar(objeto);
+}
+
+char *protocolo_crear_lista_usuarios(
+    const char *const nombres[], size_t cantidad)
+{
+    if (nombres == NULL && cantidad != 0)
+    {
+        return NULL;
+    }
+    cJSON *respuesta = cJSON_CreateObject();
+    if (respuesta == NULL)
+    {
+        return NULL;
+    }
+    cJSON *usuarios = cJSON_AddObjectToObject(respuesta, "users");
+    if (usuarios == NULL ||
+        cJSON_AddStringToObject(respuesta, "type", "USER_LIST") == NULL)
+    {
+        cJSON_Delete(respuesta);
+        return NULL;
+    }
+    for (size_t i = 0; i < cantidad; i++)
+    {
+        if (nombres[i] == NULL ||
+            cJSON_AddStringToObject(usuarios, nombres[i], "ACTIVE") == NULL)
+        {
+            cJSON_Delete(respuesta);
+            return NULL;
+        }
+    }
+    return protocolo_serializar(respuesta);
 }
