@@ -5,6 +5,7 @@
 #include "servidor.h"
 #include "cliente.h"
 #include "protocolo.h"
+#include "cJSON.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -242,6 +243,162 @@ static int servidor_nombre_ocupado(
     return 0;
 }
 
+/* Devuelve la lista de usuarios identificados. */
+static int servidor_responder_usuarios(
+    Cliente *solicitante,
+    Cliente *clientes[])
+{
+    cJSON *respuesta = cJSON_CreateObject();
+
+    if (respuesta == NULL)
+    {
+        return -1;
+    }
+
+    cJSON *usuarios = cJSON_AddObjectToObject(
+        respuesta, "users");
+
+    if (cJSON_AddStringToObject(
+            respuesta, "type", "USER_LIST") == NULL ||
+        usuarios == NULL)
+    {
+        cJSON_Delete(respuesta);
+        return -1;
+    }
+
+    for (int descriptor = 0;
+         descriptor < FD_SETSIZE;
+         descriptor++)
+    {
+        const char *nombre =
+            cliente_obtener_nombre(clientes[descriptor]);
+
+        if (nombre != NULL &&
+            cJSON_AddStringToObject(
+                usuarios, nombre, "ACTIVE") == NULL)
+        {
+            cJSON_Delete(respuesta);
+            return -1;
+        }
+    }
+
+    char *texto = cJSON_PrintUnformatted(respuesta);
+    cJSON_Delete(respuesta);
+
+    if (texto == NULL)
+    {
+        return -1;
+    }
+
+    int resultado = cliente_encolar_mensaje(
+        solicitante, texto);
+
+    free(texto);
+    return resultado;
+}
+
+/* Envía un texto público a los demás clientes identificados. */
+static int servidor_difundir_texto_publico(
+    Cliente *emisor,
+    const char *texto,
+    Cliente *clientes[])
+{
+    cJSON *evento = cJSON_CreateObject();
+
+    if (evento == NULL)
+    {
+        return -1;
+    }
+
+    if (cJSON_AddStringToObject(
+            evento, "type", "PUBLIC_TEXT_FROM") == NULL ||
+        cJSON_AddStringToObject(
+            evento, "username",
+            cliente_obtener_nombre(emisor)) == NULL ||
+        cJSON_AddStringToObject(
+            evento, "text", texto) == NULL)
+    {
+        cJSON_Delete(evento);
+        return -1;
+    }
+
+    char *mensaje = cJSON_PrintUnformatted(evento);
+    cJSON_Delete(evento);
+
+    if (mensaje == NULL)
+    {
+        return -1;
+    }
+
+    for (int descriptor = 0;
+         descriptor < FD_SETSIZE;
+         descriptor++)
+    {
+        Cliente *destinatario = clientes[descriptor];
+
+        if (destinatario == NULL ||
+            destinatario == emisor ||
+            cliente_obtener_nombre(destinatario) == NULL ||
+            cliente_tiene_cierre_pendiente(destinatario))
+        {
+            continue;
+        }
+
+        if (cliente_encolar_mensaje(
+                destinatario, mensaje) == -1)
+        {
+            fprintf(
+                stderr,
+                "No se pudo encolar el mensaje para el cliente %d.\n",
+                descriptor);
+        }
+    }
+
+    free(mensaje);
+    return 0;
+}
+
+/*
+ * Copia un campo de texto de un mensaje ya validado.
+ * El llamador libera la copia con free().
+ */
+static char *servidor_copiar_campo(
+    const char *mensaje,
+    const char *campo)
+{
+    cJSON *objeto = cJSON_ParseWithOpts(
+        mensaje, NULL, 1);
+
+    if (objeto == NULL)
+    {
+        return NULL;
+    }
+
+    const cJSON *valor = cJSON_GetObjectItemCaseSensitive(
+        objeto, campo);
+
+    if (!cJSON_IsString(valor) ||
+        valor->valuestring == NULL)
+    {
+        cJSON_Delete(objeto);
+        return NULL;
+    }
+
+    size_t longitud = strlen(valor->valuestring);
+    char *copia = malloc(longitud + 1);
+
+    if (copia != NULL)
+    {
+        memcpy(
+            copia,
+            valor->valuestring,
+            longitud + 1);
+    }
+
+    cJSON_Delete(objeto);
+    return copia;
+}
+
 static int servidor_procesar_datos(
     Cliente *cliente,
     const char *datos,
@@ -365,6 +522,47 @@ static int servidor_procesar_datos(
 
                 cliente_programar_cierre(cliente);
                 return 0;
+            }
+            else
+            {
+                char *tipo = servidor_copiar_campo(
+                    mensaje, "type");
+
+                if (tipo == NULL)
+                {
+                    return -1;
+                }
+
+                int resultado = 0;
+
+                if (strcmp(tipo, "USERS") == 0)
+                {
+                    resultado = servidor_responder_usuarios(
+                        cliente, clientes);
+                }
+                else if (strcmp(tipo, "PUBLIC_TEXT") == 0)
+                {
+                    char *texto = servidor_copiar_campo(
+                        mensaje, "text");
+
+                    if (texto == NULL)
+                    {
+                        free(tipo);
+                        return -1;
+                    }
+
+                    resultado = servidor_difundir_texto_publico(
+                        cliente, texto, clientes);
+
+                    free(texto);
+                }
+
+                free(tipo);
+
+                if (resultado == -1)
+                {
+                    return -1;
+                }
             }
         }
         cliente_limpiar_datos(cliente);
