@@ -10,7 +10,7 @@ typedef struct Servidor Servidor;
 Servidor *servidor_crear(uint16_t puerto);
 
 /* Abre la escucha y maneja multiples conexiones mediante select.
- * Recibe bytes y detecta desconexiones; aun no procesa mensajes.
+ * Recibe bytes, entrega mensajes completos al controlador y detecta desconexiones.
  * Devuelve -1 si no puede continuar.
  */
 int servidor_ejecutar(Servidor *servidor);

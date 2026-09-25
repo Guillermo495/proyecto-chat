@@ -23,11 +23,11 @@ FUENTES_PRUEBA += servidor-c/externos/cjson/cJSON.c
 
 CABECERAS += servidor-c/externos/cjson/cJSON.h
 
-FUENTES_SERVIDOR += servidor-c/src/protocolo.c
+FUENTES_SERVIDOR += servidor-c/src/protocolo.c servidor-c/src/controlador.c
 
-FUENTES_PRUEBA += servidor-c/src/protocolo.c
+FUENTES_PRUEBA += servidor-c/src/protocolo.c servidor-c/src/controlador.c
 
-CABECERAS += servidor-c/include/protocolo.h
+CABECERAS += servidor-c/include/protocolo.h servidor-c/include/controlador.h
 
 .PHONY: todo servidor pruebas limpiar
 
