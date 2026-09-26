@@ -36,18 +36,23 @@ static int controlador_rechazar_mensaje(Cliente *cliente, const char *motivo)
     return 0;
 }
 
-/* Busca el nombre entre los clientes ya identificados. */
-static int controlador_nombre_ocupado(Cliente *clientes[], const char *nombre)
+/* Devuelve el cliente con ese nombre o NULL si no existe. */
+static Cliente *controlador_buscar_por_nombre(
+    Cliente *clientes[],
+    const char *nombre)
 {
     for (int descriptor = 0; descriptor < FD_SETSIZE; descriptor++)
     {
-        const char *registrado = cliente_obtener_nombre(clientes[descriptor]);
+        Cliente *cliente = clientes[descriptor];
+        const char *registrado = cliente_obtener_nombre(cliente);
+
         if (registrado != NULL && strcmp(registrado, nombre) == 0)
         {
-            return 1;
+            return cliente;
         }
     }
-    return 0;
+
+    return NULL;
 }
 
 /* Devuelve la lista de usuarios identificados. */
@@ -113,6 +118,45 @@ static int controlador_difundir_evento(
     return 0;
 }
 
+/* Envía un mensaje privado al usuario indicado. */
+static int controlador_enviar_texto_privado(
+    Cliente *emisor,
+    const char *nombre_destino,
+    const char *texto,
+    Cliente *clientes[])
+{
+    Cliente *destinatario =
+        controlador_buscar_por_nombre(clientes, nombre_destino);
+
+    /* Una conexión pendiente de cierre ya no recibe mensajes nuevos. */
+    if (destinatario == NULL ||
+        cliente_tiene_cierre_pendiente(destinatario))
+    {
+        return controlador_encolar_respuesta(
+            emisor,
+            protocolo_crear_respuesta(
+                "TEXT", "NO_SUCH_USER", nombre_destino));
+    }
+
+    char *mensaje = protocolo_crear_texto(
+        "TEXT_FROM",
+        cliente_obtener_nombre(emisor),
+        texto);
+
+    if (mensaje == NULL)
+    {
+        return -1;
+    }
+
+    /* Encola el mensaje y libera la cadena que lo contiene. */
+    if (controlador_encolar_respuesta(destinatario, mensaje) == -1)
+    {
+        cliente_programar_cierre(destinatario);
+    }
+
+    return 0;
+}
+
 /* Consulta los campos ya validados y ejecuta la operación correspondiente. */
 static int controlador_ejecutar(
     Cliente *cliente, const MensajeProtocolo *mensaje, Cliente *clientes[])
@@ -127,7 +171,8 @@ static int controlador_ejecutar(
 
         const char *nombre = protocolo_obtener_texto(mensaje, "username");
         const char *resultado = "USER_ALREADY_EXISTS";
-        if (!controlador_nombre_ocupado(clientes, nombre))
+
+        if (controlador_buscar_por_nombre(clientes, nombre) == NULL)
         {
             if (cliente_identificar(cliente, nombre) == -1)
             {
@@ -149,6 +194,15 @@ static int controlador_ejecutar(
     if (strcmp(tipo, "USERS") == 0)
     {
         return controlador_responder_usuarios(cliente, clientes);
+    }
+
+    if (strcmp(tipo, "TEXT") == 0)
+    {
+        return controlador_enviar_texto_privado(
+            cliente,
+            protocolo_obtener_texto(mensaje, "username"),
+            protocolo_obtener_texto(mensaje, "text"),
+            clientes);
     }
 
     if (strcmp(tipo, "PUBLIC_TEXT") == 0)
