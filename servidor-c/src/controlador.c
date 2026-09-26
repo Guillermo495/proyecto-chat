@@ -181,9 +181,26 @@ static int controlador_ejecutar(
             resultado = "SUCCESS";
         }
 
-        /* Construye la respuesta para la solicitud de identificacion. */
-        return controlador_encolar_respuesta(cliente,
-                                             protocolo_crear_respuesta("IDENTIFY", resultado, nombre));
+        /* Confirma el resultado al cliente que pidió identificarse. */
+        if (controlador_encolar_respuesta(
+                cliente,
+                protocolo_crear_respuesta(
+                    "IDENTIFY", resultado, nombre)) == -1)
+        {
+            return -1;
+        }
+
+        /* Anuncia al usuario solo si la identificación tuvo éxito. */
+        if (strcmp(resultado, "SUCCESS") == 0)
+        {
+            return controlador_difundir_evento(
+                cliente,
+                protocolo_crear_evento(
+                    "NEW_USER", nombre, NULL, NULL),
+                clientes);
+        }
+
+        return 0;
     }
 
     if (cliente_obtener_nombre(cliente) == NULL)

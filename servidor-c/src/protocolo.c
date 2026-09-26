@@ -235,8 +235,12 @@ char *protocolo_crear_evento(
     const char *campo,
     const char *valor)
 {
-    if (tipo == NULL || nombre == NULL ||
-        campo == NULL || valor == NULL)
+    if (tipo == NULL || nombre == NULL)
+    {
+        return NULL;
+    }
+
+    if ((campo == NULL) != (valor == NULL))
     {
         return NULL;
     }
@@ -250,7 +254,8 @@ char *protocolo_crear_evento(
 
     if (cJSON_AddStringToObject(objeto, "type", tipo) == NULL ||
         cJSON_AddStringToObject(objeto, "username", nombre) == NULL ||
-        cJSON_AddStringToObject(objeto, campo, valor) == NULL)
+        (campo != NULL &&
+         cJSON_AddStringToObject(objeto, campo, valor) == NULL))
     {
         cJSON_Delete(objeto);
         return NULL;
