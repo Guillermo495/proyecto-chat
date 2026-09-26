@@ -11,4 +11,12 @@
 int controlador_procesar_mensaje(
     Cliente *cliente, const char *mensaje, Cliente *clientes[]);
 
+/*
+ * Anuncia la salida de un cliente identificado.
+ * Devuelve -1 si no pudo construir el evento.
+ */
+int controlador_notificar_desconexion(
+    Cliente *cliente,
+    Cliente *clientes[]);
+
 #endif

@@ -278,6 +278,31 @@ static int servidor_procesar_datos(
     return 0;
 }
 
+/* Retira la conexión y libera los recursos del cliente. */
+static void servidor_cerrar_cliente(
+    int descriptor,
+    fd_set *conexiones,
+    Cliente *clientes[])
+{
+    Cliente *cliente = clientes[descriptor];
+
+    FD_CLR(descriptor, conexiones);
+    clientes[descriptor] = NULL;
+
+    if (cliente == NULL)
+    {
+        return;
+    }
+
+    if (controlador_notificar_desconexion(cliente, clientes) == -1)
+    {
+        fprintf(stderr,
+                "No se pudo construir el aviso de desconexion.\n");
+    }
+
+    cliente_destruir(cliente);
+}
+
 /* Adaptacion de handle_client_data.
  *Recibe bytes y detecta que el cliente se desconecto.
  */
@@ -301,10 +326,13 @@ static void servidor_recibir_datos(
                 datos,
                 (size_t)recibidos, clientes) == -1)
         {
-            FD_CLR(descriptor_cliente, conexiones);
-
+            servidor_cerrar_cliente(
+                descriptor_cliente,
+                conexiones,
+                clientes);
+            /*FD_CLR(descriptor_cliente, conexiones);
             cliente_destruir(clientes[descriptor_cliente]);
-            clientes[descriptor_cliente] = NULL;
+            clientes[descriptor_cliente] = NULL; */
 
             printf(
                 "Cliente %d desconectado por mensaje inválido.\n",
@@ -331,9 +359,13 @@ static void servidor_recibir_datos(
         fflush(stdout);
     }
 
-    FD_CLR(descriptor_cliente, conexiones);
+    servidor_cerrar_cliente(
+        descriptor_cliente,
+        conexiones,
+        clientes);
+    /*FD_CLR(descriptor_cliente, conexiones);
     cliente_destruir(clientes[descriptor_cliente]);
-    clientes[descriptor_cliente] = NULL;
+    clientes[descriptor_cliente] = NULL;*/
 }
 
 /* Adaptacion selectserver.c de Brian Beej's.
@@ -487,9 +519,13 @@ int servidor_ejecutar(Servidor *servidor)
                 if (cliente_enviar_pendientes(
                         clientes[descriptor]) == -1)
                 {
-                    FD_CLR(descriptor, &conexiones);
+                    servidor_cerrar_cliente(
+                        descriptor,
+                        &conexiones,
+                        clientes);
+                    /*FD_CLR(descriptor, &conexiones);
                     cliente_destruir(clientes[descriptor]);
-                    clientes[descriptor] = NULL;
+                    clientes[descriptor] = NULL;*/
 
                     fprintf(
                         stderr,
@@ -503,9 +539,13 @@ int servidor_ejecutar(Servidor *servidor)
             if (cliente_tiene_cierre_pendiente(clientes[descriptor]) &&
                 !cliente_tiene_salida_pendiente(clientes[descriptor]))
             {
-                FD_CLR(descriptor, &conexiones);
+                servidor_cerrar_cliente(
+                    descriptor,
+                    &conexiones,
+                    clientes);
+                /*FD_CLR(descriptor, &conexiones);
                 cliente_destruir(clientes[descriptor]);
-                clientes[descriptor] = NULL;
+                clientes[descriptor] = NULL;*/
 
                 printf(
                     "Cliente %d desconectado despues de enviar la respuesta.\n", descriptor);

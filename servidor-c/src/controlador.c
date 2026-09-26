@@ -118,6 +118,25 @@ static int controlador_difundir_evento(
     return 0;
 }
 
+/* Avisa a los demás usuarios que un cliente identificado salió. */
+int controlador_notificar_desconexion(
+    Cliente *cliente,
+    Cliente *clientes[])
+{
+    const char *nombre = cliente_obtener_nombre(cliente);
+
+    if (nombre == NULL)
+    {
+        return 0;
+    }
+
+    return controlador_difundir_evento(
+        cliente,
+        protocolo_crear_evento(
+            "DISCONNECTED", nombre, NULL, NULL),
+        clientes);
+}
+
 /* Envía un mensaje privado al usuario indicado. */
 static int controlador_enviar_texto_privado(
     Cliente *emisor,
@@ -206,6 +225,12 @@ static int controlador_ejecutar(
     if (cliente_obtener_nombre(cliente) == NULL)
     {
         return controlador_rechazar_mensaje(cliente, "NOT_IDENTIFIED");
+    }
+
+    if (strcmp(tipo, "DISCONNECT") == 0)
+    {
+        cliente_programar_cierre(cliente);
+        return 0;
     }
 
     if (strcmp(tipo, "USERS") == 0)
