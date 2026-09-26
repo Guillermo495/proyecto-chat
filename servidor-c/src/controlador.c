@@ -53,7 +53,7 @@ static int controlador_nombre_ocupado(Cliente *clientes[], const char *nombre)
 /* Devuelve la lista de usuarios identificados. */
 static int controlador_responder_usuarios(Cliente *solicitante, Cliente *clientes[])
 {
-    const char *nombres[FD_SETSIZE];
+    UsuarioProtocolo usuarios[FD_SETSIZE];
     size_t cantidad = 0;
 
     for (int descriptor = 0; descriptor < FD_SETSIZE; descriptor++)
@@ -61,12 +61,15 @@ static int controlador_responder_usuarios(Cliente *solicitante, Cliente *cliente
         const char *nombre = cliente_obtener_nombre(clientes[descriptor]);
         if (nombre != NULL)
         {
-            nombres[cantidad++] = nombre;
+            usuarios[cantidad].nombre = nombre;
+            usuarios[cantidad].estado =
+                cliente_obtener_estado(clientes[descriptor]);
+            cantidad++;
         }
     }
 
     return controlador_encolar_respuesta(solicitante,
-                                         protocolo_crear_lista_usuarios(nombres, cantidad));
+                                         protocolo_crear_lista_usuarios(usuarios, cantidad));
 }
 
 /*

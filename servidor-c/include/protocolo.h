@@ -3,6 +3,13 @@
 
 #include <stddef.h>
 
+/* Datos necesarios para incluir un usuario en USER_LIST. */
+typedef struct
+{
+    const char *nombre;
+    const char *estado;
+} UsuarioProtocolo;
+
 /* El contenido del mensaje se consulta mediante las funciones del protocolo. */
 typedef struct cJSON MensajeProtocolo;
 
@@ -45,6 +52,7 @@ char *protocolo_crear_texto(
 /* Construye USER_LIST con estado ACTIVE, como en la versión anterior. */
 /* La cadena devuelta se libera con free(). */
 char *protocolo_crear_lista_usuarios(
-    const char *const nombres[], size_t cantidad);
+    const UsuarioProtocolo usuarios[],
+    size_t cantidad);
 
 #endif

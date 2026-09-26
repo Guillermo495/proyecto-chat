@@ -268,33 +268,50 @@ char *protocolo_crear_texto(
     return protocolo_crear_evento(tipo, nombre, "text", texto);
 }
 
+/*
+ * Construye USER_LIST con el nombre y estado de cada usuario.
+ * La cadena devuelta se libera con free().
+ */
 char *protocolo_crear_lista_usuarios(
-    const char *const nombres[], size_t cantidad)
+    const UsuarioProtocolo usuarios[],
+    size_t cantidad)
 {
-    if (nombres == NULL && cantidad != 0)
+    if (usuarios == NULL && cantidad != 0)
     {
         return NULL;
     }
+
     cJSON *respuesta = cJSON_CreateObject();
+
     if (respuesta == NULL)
     {
         return NULL;
     }
-    cJSON *usuarios = cJSON_AddObjectToObject(respuesta, "users");
-    if (usuarios == NULL ||
-        cJSON_AddStringToObject(respuesta, "type", "USER_LIST") == NULL)
+
+    cJSON *usuarios_json =
+        cJSON_AddObjectToObject(respuesta, "users");
+
+    if (usuarios_json == NULL ||
+        cJSON_AddStringToObject(
+            respuesta, "type", "USER_LIST") == NULL)
     {
         cJSON_Delete(respuesta);
         return NULL;
     }
+
     for (size_t i = 0; i < cantidad; i++)
     {
-        if (nombres[i] == NULL ||
-            cJSON_AddStringToObject(usuarios, nombres[i], "ACTIVE") == NULL)
+        if (usuarios[i].nombre == NULL ||
+            usuarios[i].estado == NULL ||
+            cJSON_AddStringToObject(
+                usuarios_json,
+                usuarios[i].nombre,
+                usuarios[i].estado) == NULL)
         {
             cJSON_Delete(respuesta);
             return NULL;
         }
     }
+
     return protocolo_serializar(respuesta);
 }
