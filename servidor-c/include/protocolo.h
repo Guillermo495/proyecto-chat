@@ -29,6 +29,13 @@ char *protocolo_crear_respuesta(
     const char *resultado,
     const char *extra);
 
+/* Construye un evento. La cadena devuelta se libera con free(). */
+char *protocolo_crear_evento(
+    const char *tipo,
+    const char *nombre,
+    const char *campo,
+    const char *valor);
+
 /* Construye un evento de texto. La cadena devuelta se libera con free(). */
 char *protocolo_crear_texto(
     const char *tipo,

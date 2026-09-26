@@ -62,4 +62,13 @@ const char *cliente_obtener_nombre(const Cliente *cliente);
 /* Guarda el nombre. Devuelve -1 si ya existe o falla la reserva. */
 int cliente_identificar(Cliente *cliente, const char *nombre);
 
+/* Devuelve el estado actual o NULL si el cliente no existe. */
+const char *cliente_obtener_estado(const Cliente *cliente);
+
+/* Devuelve un estado permitido como cadena permanente, o NULL. */
+const char *cliente_estado_desde_texto(const char *texto);
+
+/* Cambia el estado. Devuelve 0 si tiene éxito o -1 si es inválido. */
+int cliente_cambiar_estado(Cliente *cliente, const char *texto);
+
 #endif

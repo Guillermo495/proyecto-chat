@@ -32,6 +32,7 @@ struct Cliente
     size_t bytes_enviados;
     int cierre_pendiente;
     char *nombre;
+    const char *estado;
 };
 
 /* Crea un cliente e inicializa su búfer de recepción. */
@@ -70,6 +71,8 @@ Cliente *cliente_crear(int descriptor)
 
     cliente->cierre_pendiente = 0;
     cliente->nombre = NULL;
+
+    cliente->estado = "ACTIVE";
 
     return cliente;
 }
@@ -393,5 +396,57 @@ int cliente_identificar(Cliente *cliente, const char *nombre)
 
     memcpy(copia, nombre, longitud + 1);
     cliente->nombre = copia;
+    return 0;
+}
+
+/* Devuelve el estado actual o NULL si el cliente no existe. */
+const char *cliente_obtener_estado(const Cliente *cliente)
+{
+    return cliente == NULL ? NULL : cliente->estado;
+}
+
+/*
+ * Devuelve una cadena permanente si el estado está permitido.
+ * Devuelve NULL si el texto no corresponde a un estado.
+ */
+const char *cliente_estado_desde_texto(const char *texto)
+{
+    if (texto == NULL)
+    {
+        return NULL;
+    }
+
+    static const char *const estados[] = {
+        "ACTIVE", "AWAY", "BUSY"};
+
+    for (size_t i = 0;
+         i < sizeof(estados) / sizeof(estados[0]);
+         i++)
+    {
+        if (strcmp(texto, estados[i]) == 0)
+        {
+            return estados[i];
+        }
+    }
+
+    return NULL;
+}
+
+/* Cambia el estado. Devuelve -1 si el cliente o el estado son inválidos. */
+int cliente_cambiar_estado(Cliente *cliente, const char *texto)
+{
+    if (cliente == NULL)
+    {
+        return -1;
+    }
+
+    const char *estado = cliente_estado_desde_texto(texto);
+
+    if (estado == NULL)
+    {
+        return -1;
+    }
+
+    cliente->estado = estado;
     return 0;
 }

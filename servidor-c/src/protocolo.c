@@ -1,5 +1,6 @@
 #include "protocolo.h"
 #include "cJSON.h"
+#include "cliente.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -39,18 +40,10 @@ static int protocolo_validar_campos(
 
     if (strcmp(tipo, "STATUS") == 0)
     {
-        if (!protocolo_campo_es_texto(objeto, "status"))
-        {
-            return 0;
-        }
+        const char *estado =
+            protocolo_obtener_texto(objeto, "status");
 
-        const cJSON *estado = cJSON_GetObjectItemCaseSensitive(
-            objeto,
-            "status");
-
-        return strcmp(estado->valuestring, "ACTIVE") == 0 ||
-               strcmp(estado->valuestring, "AWAY") == 0 ||
-               strcmp(estado->valuestring, "BUSY") == 0;
+        return cliente_estado_desde_texto(estado) != NULL;
     }
 
     if (strcmp(tipo, "USERS") == 0 ||
@@ -232,26 +225,47 @@ char *protocolo_crear_respuesta(
     return protocolo_serializar(objeto);
 }
 
-char *protocolo_crear_texto(
-    const char *tipo, const char *nombre, const char *texto)
+/*
+ * Construye un evento con el nombre del usuario y el campo indicado.
+ * La cadena devuelta se libera con free().
+ */
+char *protocolo_crear_evento(
+    const char *tipo,
+    const char *nombre,
+    const char *campo,
+    const char *valor)
 {
-    if (tipo == NULL || nombre == NULL || texto == NULL)
+    if (tipo == NULL || nombre == NULL ||
+        campo == NULL || valor == NULL)
     {
         return NULL;
     }
+
     cJSON *objeto = cJSON_CreateObject();
+
     if (objeto == NULL)
     {
         return NULL;
     }
+
     if (cJSON_AddStringToObject(objeto, "type", tipo) == NULL ||
         cJSON_AddStringToObject(objeto, "username", nombre) == NULL ||
-        cJSON_AddStringToObject(objeto, "text", texto) == NULL)
+        cJSON_AddStringToObject(objeto, campo, valor) == NULL)
     {
         cJSON_Delete(objeto);
         return NULL;
     }
+
     return protocolo_serializar(objeto);
+}
+
+/* Construye un evento cuyo contenido es un mensaje de texto. */
+char *protocolo_crear_texto(
+    const char *tipo,
+    const char *nombre,
+    const char *texto)
+{
+    return protocolo_crear_evento(tipo, nombre, "text", texto);
 }
 
 char *protocolo_crear_lista_usuarios(

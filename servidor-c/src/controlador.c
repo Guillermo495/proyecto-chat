@@ -69,21 +69,28 @@ static int controlador_responder_usuarios(Cliente *solicitante, Cliente *cliente
                                          protocolo_crear_lista_usuarios(nombres, cantidad));
 }
 
-/* Envía un texto público a los demás clientes identificados. */
-static int controlador_difundir_texto_publico(
-    Cliente *emisor, const char *texto, Cliente *clientes[])
+/*
+ * Encola un evento para los demás clientes identificados.
+ * Libera el mensaje al terminar.
+ */
+static int controlador_difundir_evento(
+    Cliente *emisor,
+    char *mensaje,
+    Cliente *clientes[])
 {
-    char *mensaje = protocolo_crear_texto(
-        "PUBLIC_TEXT_FROM", cliente_obtener_nombre(emisor), texto);
     if (mensaje == NULL)
     {
         return -1;
     }
 
-    for (int descriptor = 0; descriptor < FD_SETSIZE; descriptor++)
+    for (int descriptor = 0;
+         descriptor < FD_SETSIZE;
+         descriptor++)
     {
         Cliente *destinatario = clientes[descriptor];
-        if (destinatario == NULL || destinatario == emisor ||
+
+        if (destinatario == NULL ||
+            destinatario == emisor ||
             cliente_obtener_nombre(destinatario) == NULL ||
             cliente_tiene_cierre_pendiente(destinatario))
         {
@@ -92,9 +99,10 @@ static int controlador_difundir_texto_publico(
 
         if (cliente_encolar_mensaje(destinatario, mensaje) == -1)
         {
-            fprintf(stderr,
-                    "No se pudo encolar el mensaje para el cliente %d.\n",
-                    descriptor);
+            fprintf(
+                stderr,
+                "No se pudo encolar el mensaje para el cliente %d.\n",
+                descriptor);
         }
     }
 
@@ -139,10 +147,42 @@ static int controlador_ejecutar(
     {
         return controlador_responder_usuarios(cliente, clientes);
     }
+
     if (strcmp(tipo, "PUBLIC_TEXT") == 0)
     {
-        return controlador_difundir_texto_publico(cliente,
-                                                  protocolo_obtener_texto(mensaje, "text"), clientes);
+        return controlador_difundir_evento(
+            cliente,
+            protocolo_crear_texto(
+                "PUBLIC_TEXT_FROM",
+                cliente_obtener_nombre(cliente),
+                protocolo_obtener_texto(mensaje, "text")),
+            clientes);
+    }
+
+    if (strcmp(tipo, "STATUS") == 0)
+    {
+        const char *estado =
+            protocolo_obtener_texto(mensaje, "status");
+
+        /* No anuncia el estado si sigue siendo el mismo. */
+        if (strcmp(cliente_obtener_estado(cliente), estado) == 0)
+        {
+            return 0;
+        }
+
+        if (cliente_cambiar_estado(cliente, estado) == -1)
+        {
+            return controlador_rechazar_mensaje(cliente, "INVALID");
+        }
+
+        return controlador_difundir_evento(
+            cliente,
+            protocolo_crear_evento(
+                "NEW_STATUS",
+                cliente_obtener_nombre(cliente),
+                "status",
+                cliente_obtener_estado(cliente)),
+            clientes);
     }
 
     /* Las demás operaciones siguen pendientes, como en la versión anterior. */
