@@ -7,6 +7,9 @@
 
 #include <stdlib.h>
 
+#define MAXIMO_CARACTERES_USUARIO 8
+#define MAXIMO_CARACTERES_SALA 16
+
 /*
  * Comprueba que un campo exista y contenga texto.
  * Devuelve 1 si cumple esas condiciones o 0 si no las cumple.
@@ -23,6 +26,78 @@ static int protocolo_campo_es_texto(
 }
 
 /*
+ * Comprueba que el nombre no esté vacío, tenga UTF-8 válido
+ * y no supere la cantidad de caracteres permitida.
+ */
+static int protocolo_nombre_valido(
+    const char *nombre,
+    size_t maximo)
+{
+    if (nombre == NULL || nombre[0] == '\0')
+    {
+        return 0;
+    }
+
+    const unsigned char *actual = (const unsigned char *)nombre;
+    size_t caracteres = 0;
+
+    while (*actual != '\0')
+    {
+        size_t bytes;
+
+        if (*actual <= 0x7F)
+        {
+            bytes = 1;
+        }
+        else if (*actual >= 0xC2 && *actual <= 0xDF)
+        {
+            bytes = 2;
+        }
+        else if (*actual >= 0xE0 && *actual <= 0xEF)
+        {
+            bytes = 3;
+        }
+        else if (*actual >= 0xF0 && *actual <= 0xF4)
+        {
+            bytes = 4;
+        }
+        else
+        {
+            return 0;
+        }
+
+        /* Comprueba los bytes que completan el carácter. */
+        for (size_t i = 1; i < bytes; i++)
+        {
+            if (actual[i] < 0x80 || actual[i] > 0xBF)
+            {
+                return 0;
+            }
+        }
+
+        /* Rechaza secuencias que no representan valores Unicode válidos. */
+        if ((*actual == 0xE0 && actual[1] < 0xA0) ||
+            (*actual == 0xED && actual[1] > 0x9F) ||
+            (*actual == 0xF0 && actual[1] < 0x90) ||
+            (*actual == 0xF4 && actual[1] > 0x8F))
+        {
+            return 0;
+        }
+
+        caracteres++;
+
+        if (caracteres > maximo)
+        {
+            return 0;
+        }
+
+        actual += bytes;
+    }
+
+    return 1;
+}
+
+/*
  * Comprueba los campos requeridos para cada operación.
  * Todavía no verifica usuarios, salas ni permisos.
  *
@@ -35,7 +110,9 @@ static int protocolo_validar_campos(
 {
     if (strcmp(tipo, "IDENTIFY") == 0)
     {
-        return protocolo_campo_es_texto(objeto, "username");
+        return protocolo_nombre_valido(
+            protocolo_obtener_texto(objeto, "username"),
+            MAXIMO_CARACTERES_USUARIO);
     }
 
     if (strcmp(tipo, "STATUS") == 0)
@@ -54,7 +131,9 @@ static int protocolo_validar_campos(
 
     if (strcmp(tipo, "TEXT") == 0)
     {
-        return protocolo_campo_es_texto(objeto, "username") &&
+        return protocolo_nombre_valido(
+                   protocolo_obtener_texto(objeto, "username"),
+                   MAXIMO_CARACTERES_USUARIO) &&
                protocolo_campo_es_texto(objeto, "text");
     }
 
@@ -68,18 +147,23 @@ static int protocolo_validar_campos(
         strcmp(tipo, "ROOM_USERS") == 0 ||
         strcmp(tipo, "LEAVE_ROOM") == 0)
     {
-        return protocolo_campo_es_texto(objeto, "roomname");
+        return protocolo_nombre_valido(
+            protocolo_obtener_texto(objeto, "roomname"),
+            MAXIMO_CARACTERES_SALA);
     }
 
     if (strcmp(tipo, "ROOM_TEXT") == 0)
     {
-        return protocolo_campo_es_texto(objeto, "roomname") &&
+        return protocolo_nombre_valido(
+                   protocolo_obtener_texto(objeto, "roomname"),
+                   MAXIMO_CARACTERES_SALA) &&
                protocolo_campo_es_texto(objeto, "text");
     }
 
     if (strcmp(tipo, "INVITE") == 0)
     {
-        if (!protocolo_campo_es_texto(objeto, "roomname"))
+        if (!protocolo_nombre_valido(protocolo_obtener_texto(objeto, "roomname"),
+                                     MAXIMO_CARACTERES_SALA))
         {
             return 0;
         }
@@ -99,7 +183,9 @@ static int protocolo_validar_campos(
         cJSON_ArrayForEach(nombre, nombres)
         {
             if (!cJSON_IsString(nombre) ||
-                nombre->valuestring == NULL)
+                !protocolo_nombre_valido(
+                    nombre->valuestring,
+                    MAXIMO_CARACTERES_USUARIO))
             {
                 return 0;
             }
@@ -162,12 +248,12 @@ MensajeProtocolo *protocolo_interpretar_mensaje(const char *mensaje)
     }
 
     /* IDENTIFY requiere un nombre que no esté vacío. */
-    if (strcmp(tipo->valuestring, "IDENTIFY") == 0 &&
+    /*if (strcmp(tipo->valuestring, "IDENTIFY") == 0 &&
         protocolo_obtener_texto(objeto, "username")[0] == '\0')
     {
         cJSON_Delete(objeto);
         return NULL;
-    }
+    }*/
 
     printf("Campos comprobados para: %s\n", tipo->valuestring);
     fflush(stdout);
