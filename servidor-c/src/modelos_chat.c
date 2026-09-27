@@ -1,1 +1,0 @@
-// Implementación de la memoria para usuarios (Usuario) y salas (Sala)

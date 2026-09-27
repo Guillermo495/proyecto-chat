@@ -1,0 +1,1 @@
+//Administra las conexiones del cliente

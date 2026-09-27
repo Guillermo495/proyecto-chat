@@ -7,6 +7,8 @@ DIRECTORIO_SALIDA = build
 
 SERVIDOR = $(DIRECTORIO_SALIDA)/servidor_chat
 
+PROYECTO_CLIENTE = cliente-csharp/ClienteChat.csproj
+
 PRUEBA = $(DIRECTORIO_SALIDA)/prueba_servidor
 
 FUENTES_SERVIDOR = servidor-c/src/main.c servidor-c/src/servidor.c servidor-c/src/cliente.c
@@ -29,14 +31,23 @@ FUENTES_PRUEBA += servidor-c/src/protocolo.c servidor-c/src/controlador.c
 
 CABECERAS += servidor-c/include/protocolo.h servidor-c/include/controlador.h
 
-.PHONY: todo servidor pruebas limpiar
+FUENTES_SERVIDOR += servidor-c/src/salas.c
 
-todo: servidor
+FUENTES_PRUEBA += servidor-c/src/salas.c
+
+CABECERAS += servidor-c/include/salas.h
+
+.PHONY: todo servidor cliente pruebas limpiar
+
+todo: servidor cliente
 
 servidor: $(SERVIDOR)
 
 $(SERVIDOR): $(FUENTES_SERVIDOR) $(CABECERAS) Makefile | $(DIRECTORIO_SALIDA)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS) $(FUENTES_SERVIDOR) $(LDLIBS) -o $@
+
+cliente:
+	dotnet build $(PROYECTO_CLIENTE) --configuration Release
 
 $(PRUEBA): $(FUENTES_PRUEBA) $(CABECERAS) Makefile | $(DIRECTORIO_SALIDA)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS) $(FUENTES_PRUEBA) $(LDLIBS) -o $@
@@ -48,4 +59,4 @@ pruebas: $(PRUEBA)
 	./$(PRUEBA)
 
 limpiar:
-	rm -rf $(DIRECTORIO_SALIDA)
+	rm -rf $(DIRECTORIO_SALIDA) cliente-csharp/bin cliente-csharp/obj
