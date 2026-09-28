@@ -37,7 +37,11 @@ FUENTES_PRUEBA += servidor-c/src/salas.c
 
 CABECERAS += servidor-c/include/salas.h
 
-.PHONY: todo servidor cliente pruebas limpiar
+PUERTO ?= 1234
+
+DIRECCION ?= 127.0.0.1
+
+.PHONY: todo servidor cliente ejecutar-servidor ejecutar-cliente pruebas limpiar
 
 todo: servidor cliente
 
@@ -54,6 +58,12 @@ $(PRUEBA): $(FUENTES_PRUEBA) $(CABECERAS) Makefile | $(DIRECTORIO_SALIDA)
 
 $(DIRECTORIO_SALIDA):
 	mkdir -p $@
+
+ejecutar-servidor: servidor
+	./$(SERVIDOR) $(PUERTO)
+
+ejecutar-cliente: cliente
+	dotnet run --project $(PROYECTO_CLIENTE) --configuration Release --no-build -- $(DIRECCION) $(PUERTO)
 
 pruebas: $(PRUEBA)
 	./$(PRUEBA)
