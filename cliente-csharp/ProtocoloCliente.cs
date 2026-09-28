@@ -56,7 +56,7 @@ internal static class ProtocoloCliente
 
             case "NEW_STATUS":
                 return $"{ObtenerTexto(objeto, "username")} cambió su estado a " +
-                       ObtenerTexto(objeto, "status");
+                    DescribirEstado(ObtenerTexto(objeto, "status")) + ".";
 
             case "RESPONSE":
                 return $"{ObtenerTexto(objeto, "operation")}: " +
@@ -150,10 +150,22 @@ internal static class ProtocoloCliente
             }
 
             texto.AppendLine();
-            texto.Append($"{usuario.Name}: {usuario.Value.GetString()}");
+            texto.Append($"{usuario.Name}: {DescribirEstado(usuario.Value.GetString()!)}");
         }
 
         return texto.ToString();
+    }
+
+    /* Traduce los estados recibidos para mostrarlos al usuario. */
+    private static string DescribirEstado(string estado)
+    {
+        return estado switch
+        {
+            "ACTIVE" => "Disponible",
+            "AWAY" => "Ausente",
+            "BUSY" => "Ocupado",
+            _ => "Estado desconocido"
+        };
     }
 
 }

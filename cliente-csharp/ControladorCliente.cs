@@ -10,7 +10,7 @@ internal static class ControladorCliente
         "Escribe texto para enviar un mensaje público.\n" +
         "/usuarios: consultar usuarios conectados.\n" +
         "/privado usuario mensaje: enviar un mensaje privado.\n" +
-        "/estado ACTIVE|AWAY|BUSY: cambiar de estado.\n" +
+        "/estado disponible|ausente|ocupado Cambiar de estado.\n" +
          "/salir: desconectarse.");
 
         Task recepcion = RecibirMensajesAsync(
@@ -127,24 +127,32 @@ internal static class ControladorCliente
                     partes[1], partes[2]);
 
             case "/estado":
-                if (partes.Length != 2)
                 {
-                    Console.WriteLine("Uso: /estado ACTIVE|AWAY|BUSY");
-                    return null;
+                    if (partes.Length != 2)
+                    {
+                        Console.WriteLine(
+                            "Uso: /estado Disponible|Ausente|Ocupado");
+                        return null;
+                    }
+
+                    /* Traduce el estado escrito al valor utilizado por el protocolo. */
+                    string? estado = partes[1].ToLowerInvariant() switch
+                    {
+                        "disponible" => "ACTIVE",
+                        "ausente" => "AWAY",
+                        "ocupado" => "BUSY",
+                        _ => null
+                    };
+
+                    if (estado == null)
+                    {
+                        Console.WriteLine(
+                            "Estado no disponible. Usa disponible, ausente u ocupado.");
+                        return null;
+                    }
+
+                    return ProtocoloCliente.CrearCambioEstado(estado);
                 }
-
-                string estado = partes[1].ToUpperInvariant();
-
-                if (estado != "ACTIVE" &&
-                    estado != "AWAY" &&
-                    estado != "BUSY")
-                {
-                    Console.WriteLine(
-                        "Los estados permitidos son ACTIVE, AWAY y BUSY.");
-                    return null;
-                }
-
-                return ProtocoloCliente.CrearCambioEstado(estado);
 
             default:
                 Console.WriteLine(
