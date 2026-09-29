@@ -1,0 +1,627 @@
+\documentclass[11pt,letterpaper]{article}
+
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[spanish,es-noquoting]{babel}
+\usepackage{lmodern}
+\usepackage[margin=2.5cm]{geometry}
+
+\usepackage{microtype}
+\usepackage{graphicx}
+\usepackage{array}
+\usepackage{tabularx}
+\usepackage{booktabs}
+\usepackage{tikz}
+\usepackage{enumitem}
+\usepackage{listings}
+\usepackage[hidelinks]{hyperref}
+
+\usetikzlibrary{arrows.meta,positioning,calc}
+
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{6pt}
+\setlength{\emergencystretch}{2em}
+
+\setlist{nosep,leftmargin=1.4em}
+
+\pagestyle{plain}
+
+\lstset{
+    basicstyle=\ttfamily\small,
+    breaklines=true,
+    columns=fullflexible,
+    keepspaces=true,
+    showstringspaces=false
+}
+
+\newcommand{\archivo}[1]{\texttt{\detokenize{#1}}}
+
+\newcommand{\crc}[3]{%
+    \fbox{%
+        \begin{minipage}[t]{.445\textwidth}
+            \small
+            \textbf{#1}
+
+            \textbf{Responsabilidades}
+
+            #2
+
+            \textbf{Colaboradores}
+
+            #3
+        \end{minipage}%
+    }%
+}
+
+\tikzset{
+    modulo/.style={
+        draw,
+        align=center,
+        font=\small,
+        minimum height=1cm,
+        text width=4cm
+    },
+    flecha/.style={
+        -{Stealth[length=2mm]}
+    },
+    etiqueta/.style={
+        font=\scriptsize,
+        fill=white,
+        inner sep=2pt
+    }
+}
+
+\begin{document}
+
+\begin{center}
+    \textbf{Universidad Nacional Autónoma de México}\\
+    Facultad de Ciencias
+
+    \textbf{Reporte de Modelado y Programación}\\
+    Chat con servidor en C y cliente en C\#
+
+    Guillermo Ricardo Gómez Gómez
+\end{center}
+
+\section{Resumen}
+
+Desarrollé un sistema de chat con un servidor en C y un cliente de
+consola en C\#, utilizando TCP, cJSON, .NET y
+\archivo{System.Text.Json}. El proyecto fue mi primer acercamiento
+a ambos lenguajes y tuve que aprender sobre administración de memoria,
+comunicación mediante sockets e interpretación de mensajes JSON.
+La principal dificultad de diseño fue la acumulación de responsabilidades
+en \archivo{servidor.c}. Para resolverla, separé el manejo de conexiones,
+el protocolo y la ejecución de operaciones. Como resultado, obtuve una
+versión funcional del chat básico con identificación, consulta de
+usuarios, estados, mensajes públicos y privados, y notificaciones de
+conexión y desconexión.
+
+\section{Introducción}
+
+El objetivo del proyecto fue desarrollar un servidor en C y un cliente
+en C\# que se comunicaran mediante el protocolo definido para la materia.
+Además de obtener una aplicación funcional, tuve que aprender a
+organizar un programa que fue creciendo conforme incorporaba nuevas
+operaciones. En este reporte explico las decisiones que tomé, las
+dificultades que encontré y los cambios que necesité hacer para
+continuar el desarrollo.
+
+Como mi experiencia previa era principalmente en Java, trabajar con
+C\# me resultó más fácil que trabajar con C, sobre todo por el manejo
+de la memoria. En C comencé con un programa mínimo y el manejo de
+argumentos para recibir el puerto del servidor. Después tuve que
+comprender el uso de apuntadores, la reserva y liberación de memoria,
+y la separación entre cabeceras e implementaciones. Para el cliente
+necesité familiarizarme con la estructura de un proyecto de .NET y
+con la coordinación de la entrada del usuario y la recepción de
+mensajes.
+
+La documentación fue una parte importante de este aprendizaje.
+Utilicé la guía de Beej como referencia para la comunicación mediante
+sockets, las páginas del manual de Linux para comprender las funciones
+de memoria y la documentación de Microsoft para desarrollar el cliente.
+También incorporé cJSON para interpretar y construir mensajes.
+Estos recursos me facilitaron el avance, aunque adaptar sus ejemplos
+me obligó a comprender cómo utilizarlos y cómo relacionarlos con el
+código que ya tenía
+\cite{beej,malloc-man,tcp,json,cjson}.
+
+Al principio, mi prioridad fue conseguir que cada nueva función
+trabajara. Esto me permitió avanzar poco a poco, pero también dejó
+en evidencia que no había planeado bien las responsabilidades.
+Varias tareas terminaron concentradas en \archivo{servidor.c}, y
+agregar cambios se volvió cada vez más difícil. Cuando reconocí
+este problema, revisé el diseño y procuré aplicar mejor la idea de
+``divide y vencerás'', separando tareas y reutilizando código que
+había comenzado a repetir.
+
+La versión final comprende las operaciones básicas del chat y un
+cliente de consola. Prioricé completar esa interacción y conservé
+el servidor monohilo ante la cercanía de la entrega. Mi intención
+era contar primero con una versión funcional y después incorporar
+los cambios más grandes, pero calculé mal el tiempo que necesitaba.
+Esta experiencia me permitió identificar qué habría sido conveniente
+prever desde el inicio.
+
+\section{Análisis y diseño}
+
+\subsection{Del planteamiento inicial a un servidor con demasiadas responsabilidades}
+
+Al principio separé el proyecto en servidor, cliente y modelos del
+chat. Había creado \archivo{modelos_chat.c} y \archivo{modelos_chat.h}
+para representar usuarios y salas, pero esos archivos quedaron vacíos
+mientras avanzaba con las conexiones. La información de cada usuario
+terminó guardándose dentro de \archivo{Cliente}, y más adelante
+renombré esos archivos a \archivo{salas.c} y \archivo{salas.h} para
+darles una responsabilidad más clara.
+
+Comencé por un programa mínimo, la lectura del puerto y la apertura
+del socket. Después añadí la aceptación de conexiones, la recepción
+de bytes y la atención de varios clientes. Esta secuencia me permitió
+observar resultados pronto y comprobar cada avance.
+
+Sin embargo, no apliqué adecuadamente el principio de ``divide y
+vencerás''. Conforme incorporé el manejo de JSON, la identificación,
+las consultas y las respuestas, \archivo{servidor.c} acumuló tareas
+distintas y superó las 800 líneas. La cantidad de líneas fue una señal
+de que algo no iba bien. En ese punto me costaba encontrar dónde
+hacer cada cambio y decidí separar las responsabilidades.
+
+Este diagrama muestra cómo estaba organizado el proyecto en esa
+etapa, antes de separar las responsabilidades que había acumulado
+el servidor. El cliente en C\# todavía no existía, así que utilicé
+netcat para probar las conexiones.
+
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}
+    \node[modulo] (main) at (0,0) {
+        \textbf{main.c}\\
+        Argumentos y arranque
+    };
+
+    \node[
+        modulo,
+        text width=8cm,
+        minimum height=1.9cm
+    ] (srv) at (0,-2.2) {
+        \textbf{servidor.c}\\
+        Escucha y conexiones\\
+        Recepción y mensajes completos\\
+        Solicitudes, usuarios y respuestas
+    };
+
+    \node[
+        modulo,
+        text width=4.6cm
+    ] (cli) at (-3,-4.7) {
+        \textbf{cliente.c / Cliente}\\
+        Socket y búferes por conexión
+    };
+
+    \node[
+        modulo,
+        text width=4.6cm
+    ] (nc) at (3,-4.7) {
+        \textbf{netcat}\\
+        Pruebas de conexión
+    };
+
+    \draw[flecha] (main)--(srv);
+    \draw[flecha] (srv)--(cli);
+    \draw[flecha,<->] (srv)--node[etiqueta,right]{TCP}(nc);
+\end{tikzpicture}
+\caption{Organización del proyecto antes de separar el controlador y el protocolo.}
+\end{figure}
+
+Resolví el problema de acumulación de responsabilidades moviendo la
+interpretación y construcción de JSON a \archivo{protocolo.c}, y
+las decisiones sobre las operaciones del chat a
+\archivo{controlador.c}. Dejé en \archivo{servidor.c} el manejo de
+conexiones y la recepción de mensajes completos. Así pude cambiar
+una operación sin mezclarla con el código encargado de aceptar
+conexiones y recibir bytes.
+
+También conservé los comentarios sobre las adaptaciones y reuní en
+funciones comunes tareas que comenzaban a repetirse, como encolar
+respuestas y enviar eventos a varios usuarios.
+
+En este punto Git fue clave, porque me permitió consultar versiones
+anteriores y comparar cómo había cambiado el programa. Cuando una
+integración dejó de funcionar, pude regresar a una versión estable
+y retomar los cambios poco a poco.
+
+\subsection{Organización después de la refactorización}
+
+Este diagrama muestra cómo quedaron organizadas las partes del
+proyecto después de la refactorización y cómo colaboran entre sí.
+Repartí el código en archivos con responsabilidades concretas.
+\archivo{Cliente} reúne la información de cada conexión y
+\archivo{Servidor} administra la escucha y la atención de los
+clientes. Esta organización me ayudó a identificar dónde realizar
+cada cambio y a evitar que las tareas volvieran a concentrarse en
+\archivo{servidor.c}.
+
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}
+    \node[modulo,text width=4.8cm] (srv) at (-3.3,0) {
+        \textbf{«módulo» servidor.c}\\
+        Conexiones y recepción
+    };
+
+    \node[modulo,text width=4.8cm] (con) at (-3.3,-2) {
+        \textbf{«módulo» controlador.c}\\
+        Operaciones del chat
+    };
+
+    \node[modulo,text width=4.8cm] (pro) at (-3.3,-4) {
+        \textbf{«módulo» protocolo.c}\\
+        Validación y construcción de JSON
+    };
+
+    \node[modulo,text width=4.8cm] (cli) at (-3.3,-6) {
+        \textbf{«estructura» Cliente}\\
+        Nombre, estado y búferes
+    };
+
+    \node[modulo,text width=4.8cm] (cx) at (3.3,0) {
+        \textbf{«clase» ConexionCliente}\\
+        Envío y recepción por TCP
+    };
+
+    \node[modulo,text width=4.8cm] (cc) at (3.3,-2) {
+        \textbf{«clase» ControladorCliente}\\
+        Comandos y recepción
+    };
+
+    \node[modulo,text width=4.8cm] (pc) at (3.3,-4) {
+        \textbf{«clase» ProtocoloCliente}\\
+        JSON y mensajes legibles
+    };
+
+    \draw[flecha] (srv)--(con);
+    \draw[flecha] (con)--(pro);
+    \draw[flecha] (con.west)--++(-.6,0)|-(cli.west);
+    \draw[flecha] (srv.west)--++(-2,0)|-(cli.west);
+    \draw[flecha] (pro)--node[etiqueta,right]{valida estados}(cli);
+    \draw[flecha] (cc)--(cx);
+    \draw[flecha] (cc)--(pc);
+    \draw[flecha,<->] (srv)--node[etiqueta,above]{TCP / JSON}(cx);
+\end{tikzpicture}
+\caption{Organización de los módulos del servidor y las clases del cliente después de la refactorización.}
+\end{figure}
+
+Tomé como referencia la separación de responsabilidades de
+Modelo--Vista--Controlador. Los datos de las conexiones y los
+usuarios forman parte del modelo, el controlador decide qué
+operación ejecutar y la consola permite interactuar con el programa.
+Aun así, no logré una separación completa. Por ejemplo,
+\archivo{ProtocoloCliente} también prepara el texto que se muestra
+en pantalla, y \archivo{protocolo.c} consulta la función de estados
+de \archivo{cliente.c}. Son partes que podría organizar mejor.
+
+Estas fueron algunas de las decisiones que tomé durante el desarrollo.
+
+\begin{center}
+\small
+\begin{tabularx}{\textwidth}{@{}p{3.7cm}X@{}}
+    \toprule
+    Decisión & Motivo \\
+    \midrule
+
+    Cliente de consola &
+    Me permitió concentrarme en la comunicación y en los comandos
+    antes de trabajar en una interfaz gráfica. \\
+
+    Bibliotecas JSON &
+    Utilicé cJSON y System.Text.Json para interpretar y construir
+    mensajes, y dejé en mi código las comprobaciones del protocolo. \\
+
+    Arreglo por descriptor &
+    Me permitió localizar directamente al cliente asociado con un
+    socket. La búsqueda por nombre todavía requiere recorrer
+    los usuarios. \\
+
+    Búfer ampliable &
+    Lo necesité para conservar fragmentos cuando un mensaje no
+    llegaba completo en una sola lectura. \\
+
+    \bottomrule
+\end{tabularx}
+\end{center}
+
+\subsection{Tarjetas CRC como revisión del diseño}
+
+Preparé estas tarjetas para revisar las responsabilidades de cada
+parte del programa y las otras partes con las que necesita colaborar. No las utilicé al comenzar el proyecto, pero al elaborarlas
+pude reconocer con más claridad la separación que buscaba durante
+la refactorización. Para el código en C las adapté a módulos y
+estructuras, y para C\# utilicé las clases del cliente.
+
+\noindent
+\crc{Servidor / servidor.c}
+    {Abrir la escucha, aceptar conexiones, recibir mensajes y
+    cerrar conexiones.}
+    {Cliente y controlador.c.}
+\hfill
+\crc{Cliente / cliente.c}
+    {Guardar nombre y estado, administrar búferes y conservar
+    los mensajes pendientes de envío.}
+    {servidor.c y controlador.c.}
+
+\vspace{7pt}
+\noindent
+\crc{Protocolo / protocolo.c}
+    {Interpretar y validar JSON, consultar campos y construir
+    respuestas y eventos.}
+    {cJSON, controlador.c y cliente.c para los estados.}
+\hfill
+\crc{Controlador / controlador.c}
+    {Identificar usuarios, buscar destinatarios, ejecutar
+    solicitudes y enviar avisos.}
+    {Cliente, protocolo.c y servidor.c.}
+
+\vspace{7pt}
+\noindent
+\crc{ConexionCliente}
+    {Establecer la conexión, enviar y recibir mensajes, y
+    liberar los recursos de conexión.}
+    {TcpClient, StreamReader, Program y ControladorCliente.}
+\hfill
+\crc{ProtocoloCliente}
+    {Construir solicitudes JSON e interpretar las respuestas
+    para mostrarlas al usuario.}
+    {System.Text.Json, Program y ControladorCliente.}
+
+\vspace{7pt}
+\noindent
+\crc{ControladorCliente}
+    {Leer comandos, coordinar la recepción, mostrar mensajes
+    y gestionar la salida.}
+    {ConexionCliente, ProtocoloCliente y Console.}
+\hfill
+\crc{Salas / salas.c (planeado)}
+    {Guardar salas, integrantes e invitaciones, retirar
+    usuarios y eliminar salas vacías.}
+    {Controlador y Cliente.}
+
+\subsection{Dificultades con los mensajes y la memoria}
+
+Seguí la indicación del protocolo del libro de terminar cada
+mensaje con un salto de línea, \archivo{\n}, e ignorar las líneas
+vacías. Al implementarlo tuve que comprender que una
+lectura del socket no siempre contiene un mensaje completo.
+Puede traer solo una parte o varios mensajes juntos, así que
+necesité conservar los fragmentos hasta encontrar el salto de línea.
+
+Elegí un búfer de 4096 bytes para recibir datos y fijé el límite
+del mensaje completo en 1\,048\,576 bytes, conforme a las indicaciones. También tuve que distinguir el salto de línea
+del carácter \archivo{\0}, que termina las cadenas en C y no
+debe enviarse como parte del mensaje.
+
+Este diagrama muestra el recorrido de un mensaje público y permite relacionar esa dificultad con las responsabilidades que
+separé durante la refactorización. Primero reúno el
+mensaje completo, después procesarlo y finalmente enviarlo a
+los demás clientes.
+
+\begin{figure}[h]
+\centering
+\begin{tikzpicture}[x=1cm,y=1cm]
+\foreach \x/\nombre in {
+    0/Cliente emisor,
+    4/Servidor,
+    8/Controlador,
+    12/Cliente receptor
+}{
+    \node[
+        font=\small\bfseries,
+        align=center
+    ] at (\x,0) {\nombre};
+
+    \draw[dashed,gray] (\x,-.3)--(\x,-3.4);
+}
+
+\draw[flecha]
+    (0,-.7)--node[etiqueta,above]
+    {JSON + salto de línea}(4,-.7);
+
+\draw[flecha]
+    (4,-1.4)--node[etiqueta,above]
+    {mensaje completo}(8,-1.4);
+
+\draw[flecha]
+    (8,-2.1)--node[etiqueta,above]
+    {encola evento}(4,-2.1);
+
+\draw[flecha]
+    (4,-2.9)--node[etiqueta,above]
+    {envía cuando hay escritura disponible}(12,-2.9);
+\end{tikzpicture}
+\caption{Secuencia simplificada de un mensaje público. Validación JSON y cola del destinatario se resumen dentro de las acciones del controlador; recibir no equivale a enviar inmediatamente.}
+\end{figure}
+
+Otra dificultad fue asumir que enviar un mensaje significaba
+transmitirlo completo de una sola vez. Para resolverlo guardé
+los bytes pendientes y utilicé \archivo{select()} para saber
+cuándo podía continuar el envío. Esto amplió el ejemplo inicial
+de Beej, que había tomado como base para atender las conexiones.
+
+Al probar el protocolo también aprendí a distinguir los mensajes
+que envía el cliente de los que responde el servidor. Por ejemplo,
+envié \archivo{DISCONNECTED} cuando correspondía
+\archivo{DISCONNECT}, y recibí una respuesta de mensaje inválido.
+Hacer estas pruebas me ayudó a comprobar que no bastaba con que
+el JSON estuviera bien escrito, también debía representar una
+solicitud válida.
+
+El manejo de memoria requirió especial atención. Consulté
+\archivo{man 3 malloc} para comprender la reserva, ampliación y
+liberación de memoria. Al utilizar \archivo{realloc()}, guardé
+primero el resultado en un apuntador temporal para no perder la
+reserva anterior si la ampliación fallaba \cite{malloc-man}.
+
+También tuve que revisar qué datos podía conservar después de
+liberar un objeto JSON. El nombre del cliente necesitaba una
+copia propia, mientras que las respuestas podían liberarse
+después de copiarlas a la cola de salida.
+
+Por último, encontré que cerrar una conexión inmediatamente
+después de detectar un error podía impedir que el cliente
+recibiera la respuesta. Para resolverlo añadí un cierre pendiente,
+de modo que el servidor terminara de enviar lo acumulado antes
+de cerrar la conexión.
+
+\section{Implementación}
+
+\subsection{Tecnologías y decisiones prácticas}
+
+Implementé el servidor con C11, sockets POSIX y cJSON. De la guía
+de Beej adapté ejemplos para aceptar conexiones, atender varios
+clientes y ampliar arreglos. A partir de ellos añadí la información
+de cada conexión, los límites de los búferes y el procesamiento
+del protocolo \cite{beej}.
+
+Incorporé los archivos y la licencia de cJSON al proyecto y adapté
+el ejemplo de lectura de campos de su documentación a los mensajes
+del chat. Esto me permitió concentrarme en validar los campos y
+ejecutar las operaciones, aunque tuve que aprender a liberar los
+objetos que construía la biblioteca \cite{cjson}.
+
+Para el cliente utilicé C\# y un proyecto de consola dirigido a
+\archivo{net10.0} y me apoyé en la documentación de Microsoft para utilizar
+\archivo{TcpClient}, \archivo{StreamReader} y
+\archivo{System.Text.Json} \cite{tcp,json}.
+
+Una de las decisiones del cliente fue permitir que el usuario
+escribiera texto normal y comandos en español. Por ejemplo,
+\archivo{/estado ausente} se convierte en el valor
+\archivo{AWAY} del protocolo. Esto surgió para que el usuario no tuviera que escribir JSON para utilizar el chat.
+
+Antes de contar con el cliente, utilicé netcat para verificar
+las conexiones y enviar solicitudes manualmente. Así pude
+avanzar con el servidor sin depender de tener terminados ambos
+programas al mismo tiempo.
+
+Comencé con una configuración de CMake y después cambié a Make,
+debido a la complejidad de CMake. Make me resultó
+más fácil de manejar, y terminé reuniendo en el mismo Makefile
+la compilación y ejecución del servidor y del cliente. Poder
+elegir el puerto y la dirección desde esos comandos me facilitó
+las pruebas.
+
+\section{Conclusiones}
+
+Logré comunicar programas escritos en dos lenguajes que no había
+utilizado antes. Pasar de observar bytes en una terminal a
+intercambiar mensajes desde el cliente de consola me permitió
+ver el resultado de cada etapa. También aprendí que recibir
+datos, reconocer un mensaje y ejecutar una operación son
+problemas diferentes, y que separarlos desde el principio
+habría simplificado el desarrollo.
+
+\subsection{Dificultades y correcciones durante el desarrollo}
+
+La primera dificultad fue comprender el manejo de memoria y
+apuntadores en C. Los descriptores de socket, las reservas
+dinámicas y las cabeceras requirieron una atención a la que
+no estaba acostumbrado trabajando con Java. Uno de mis errores
+fue utilizar \archivo{memcmp()} cuando necesitaba copiar datos
+con \archivo{memcpy()}. En otra ocasión omití el asterisco de
+un parámetro en una cabecera, por lo que la declaración dejó
+de coincidir con la implementación.
+
+También confundí comparación y asignación, olvidé inicializar
+algunos atributos y escribí retornos incorrectos. Un mensaje
+válido llegó a provocar una desconexión porque había manejado
+mal el resultado de una función. Estos errores me hicieron
+ver que conseguir que el programa compilara era solo una parte
+del trabajo.
+
+Otro error fue intentar acceder a \archivo{cliente->salida}
+después de ejecutar \archivo{free(cliente)}. Lo corregí
+liberando primero los recursos internos y después la estructura.
+Este caso me ayudó a comprender que debía prestar atención
+tanto a qué memoria liberaba como al orden en que lo hacía.
+
+Al integrar cambios dejé llaves mal colocadas, funciones
+dentro de otras por accidente, código después de
+\archivo{return} y definiciones duplicadas. Durante la
+refactorización también aparecieron funciones declaradas
+pero sin implementación y llamadas que conservaban nombres
+anteriores. A partir de estos problemas procuré compilar y
+comprobar cada cambio pequeño antes de continuar.
+
+En C\# tuve dificultades de configuración. Creé el proyecto
+inicialmente fuera del repositorio, una clase no se compilaba
+porque el archivo tenía una extensión incorrecta y olvidé
+importar \archivo{System.Text} para utilizar
+\archivo{StringBuilder}. Aunque eran errores pequeños,
+me hicieron perder tiempo y aprendí a revisar también
+los archivos y la configuración antes de cambiar la lógica.
+
+\subsection{Cosas a mejorar}
+
+Resolver la acumulación de responsabilidades fue una de las
+mejoras más importantes del proyecto. Separar el controlador
+y el protocolo me permitió reunir código repetido y encontrar
+con más facilidad dónde hacer los cambios. Sin embargo,
+habría sido mejor definir esas responsabilidades antes de
+que el servidor creciera tanto. Utilizar las tarjetas CRC
+desde el inicio me habría ayudado a revisar esa organización.
+
+Git me permitió conservar versiones funcionales y retomar
+el trabajo después de una integración fallida. Mantendría
+esa forma de avanzar en una siguiente versión, con cambios
+pequeños y comprobaciones frecuentes, pero dedicaría más
+tiempo al análisis antes de comenzar a programar.
+
+Mi mala planeación también afectó el alcance de la entrega.
+Dejé pendientes las salas completas, la migración a multihilos
+y el cierre ordenado del servidor. Quiero retomarlos después
+para terminar el proyecto, pero con una revisión previa de
+las responsabilidades y del tiempo que requiere cada parte.
+
+\begingroup
+\small
+
+\begin{thebibliography}{9}
+
+\bibitem{beej}
+Brian ``Beej'' Hall.
+\textit{Beej's Guide to Network Programming}.
+Guía y ejemplos \archivo{selectserver.c} y \archivo{pollserver.c}.
+\url{https://beej.us/guide/bgnet/}.
+
+\bibitem{chat-server}
+Yorick de Wid.
+\textit{Chat-Server}.
+Repositorio de código fuente en GitHub.
+\url{https://github.com/yorickdewid/Chat-Server}.
+
+\bibitem{malloc-man}
+Linux man-pages project.
+
+\bibitem{cjson}
+Dave Gamble y colaboradores.
+\textit{cJSON}.
+Código, README y licencia.
+\url{https://github.com/DaveGamble/cJSON}.
+
+\bibitem{tcp}
+Microsoft.
+\textit{Uso de TcpClient y TcpListener}.
+Microsoft Learn.
+\url{https://learn.microsoft.com/es-es/dotnet/fundamentals/networking/sockets/tcp-classes}.
+
+\bibitem{json}
+Microsoft.
+\textit{Uso de un DOM JSON en System.Text.Json}.
+Microsoft Learn.
+\url{https://learn.microsoft.com/es-es/dotnet/standard/serialization/system-text-json/use-dom}.
+
+\end{thebibliography}
+
+\endgroup
+\end{document}
