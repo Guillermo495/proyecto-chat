@@ -1,0 +1,11 @@
+{
+  "resultado": "APROBADO",
+  "clientes_simultaneos": 64,
+  "mensajes_por_cliente": 64,
+  "publicaciones": 4096,
+  "entregas_verificadas": 258048,
+  "desconexiones": 64,
+  "usuarios_anteriores_restantes": 0,
+  "segundos_mensajes": 5.942,
+  "segundos_total": 5.96
+}
